@@ -1,0 +1,329 @@
+#!/bin/sh
+#
+# /init - Initramfs Init Script
+#
+# This script is the first userspace process (PID 1) when booting
+# with an initramfs. It prepares the system and optionally switches
+# to a real root filesystem.
+#
+# Kernel bootargs that affect this script:
+#   root=/dev/XXX    - Root device to mount and switch to
+#   init=/path/init  - Init program on real root (default: /sbin/init)
+#   rescue           - Drop to shell immediately
+#   debug            - Enable verbose output
+#
+# If no root= is specified, the script starts an interactive shell.
+#
+
+#==============================================================================
+# Initial Setup
+#==============================================================================
+
+# Mount essential virtual filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+# Create standard device nodes if not created by devtmpfs
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+mknod -m 666 /dev/null c 1 3 2>/dev/null
+mknod -m 666 /dev/zero c 1 5 2>/dev/null
+mknod -m 666 /dev/tty c 5 0 2>/dev/null
+
+# Redirect console
+exec 0</dev/console
+exec 1>/dev/console
+exec 2>/dev/console
+
+#==============================================================================
+# Helper Functions
+#==============================================================================
+
+# Print message with timestamp
+log() {
+    echo "[$(cat /proc/uptime | cut -d' ' -f1)] $1"
+}
+
+# Print error and drop to shell
+fatal() {
+    echo ""
+    echo "=============================================="
+    echo "  FATAL ERROR"
+    echo "=============================================="
+    echo "  $1"
+    echo "=============================================="
+    echo ""
+    echo "Dropping to rescue shell..."
+    echo "Type 'exit' to retry or 'poweroff' to shutdown."
+    echo ""
+    exec /bin/sh
+}
+
+# Show available devices
+show_devices() {
+    echo ""
+    echo "Available block devices:"
+    ls -la /dev/mmc* /dev/sd* /dev/nvme* /dev/vd* 2>/dev/null || echo "  (none)"
+    echo ""
+    echo "/proc/partitions:"
+    cat /proc/partitions
+    echo ""
+}
+
+# Wait for a device to appear
+wait_for_device() {
+    local device="$1"
+    local timeout="${2:-30}"
+    
+    log "Waiting for device: $device (timeout: ${timeout}s)"
+    
+    while [ ! -e "$device" ] && [ $timeout -gt 0 ]; do
+        sleep 1
+        timeout=$((timeout - 1))
+    done
+    
+    if [ -e "$device" ]; then
+        log "Device found: $device"
+        return 0
+    else
+        log "Device not found: $device"
+        return 1
+    fi
+}
+
+#==============================================================================
+# Parse Command Line
+#==============================================================================
+
+# Defaults
+ROOT=""
+INIT="/sbin/init"
+ROOTFSTYPE=""
+ROOTFLAGS="ro"
+RESCUE=""
+DEBUG=""
+
+# Parse /proc/cmdline
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        root=*)
+            ROOT="${param#root=}"
+            ;;
+        init=*)
+            INIT="${param#init=}"
+            ;;
+        rdinit=*)
+            # Ignore rdinit, we ARE the rdinit
+            ;;
+        rootfstype=*)
+            ROOTFSTYPE="${param#rootfstype=}"
+            ;;
+        rootflags=*)
+            ROOTFLAGS="${param#rootflags=}"
+            ;;
+        ro)
+            ROOTFLAGS="ro"
+            ;;
+        rw)
+            ROOTFLAGS="rw"
+            ;;
+        rescue|single|emergency|S|s|1)
+            RESCUE="yes"
+            ;;
+        debug)
+            DEBUG="yes"
+            set -x
+            ;;
+    esac
+done
+
+#==============================================================================
+# Banner
+#==============================================================================
+
+echo ""
+echo "================================================"
+echo "       Initramfs Init Script"
+echo "================================================"
+echo " Kernel: $(uname -r)"
+echo " Time:   $(cat /proc/uptime | cut -d' ' -f1)s since boot"
+echo "================================================"
+echo ""
+
+if [ -n "$DEBUG" ]; then
+    echo "Boot parameters:"
+    echo "  root=$ROOT"
+    echo "  init=$INIT"
+    echo "  rootfstype=$ROOTFSTYPE"
+    echo "  rootflags=$ROOTFLAGS"
+    echo "  rescue=$RESCUE"
+    echo ""
+fi
+
+#==============================================================================
+# Rescue Mode
+#==============================================================================
+
+if [ -n "$RESCUE" ]; then
+    echo "=============================================="
+    echo "  RESCUE MODE"
+    echo "=============================================="
+    echo ""
+    echo "Available commands:"
+    busybox --list | tr '\n' ' '
+    echo ""
+    echo ""
+    echo "Useful commands:"
+    echo "  mount /dev/mmcblk0p2 /mnt/root  - Mount root filesystem"
+    echo "  ls /mnt/root                     - List root contents"
+    echo "  chroot /mnt/root /bin/sh         - Chroot into root"
+    echo "  exit                             - Continue boot (if possible)"
+    echo ""
+    exec /bin/sh
+fi
+
+#==============================================================================
+# No Root - Stay in Initramfs
+#==============================================================================
+
+if [ -z "$ROOT" ]; then
+    echo "=============================================="
+    echo "  INITRAMFS MODE"
+    echo "=============================================="
+    echo ""
+    echo "No root= parameter specified in bootargs."
+    echo "Running entirely from initramfs."
+    echo ""
+    echo "This is a minimal BusyBox environment."
+    echo "Available applets: $(busybox --list | wc -l)"
+    echo ""
+    echo "To mount a root filesystem and continue boot:"
+    echo "  mount /dev/mmcblk0p2 /mnt/root"
+    echo "  exec switch_root /mnt/root /sbin/init"
+    echo ""
+    exec /bin/sh
+fi
+
+#==============================================================================
+# Wait for Root Device
+#==============================================================================
+
+# Handle special root specifications
+case "$ROOT" in
+    LABEL=*)
+        # TODO: Find by label
+        log "LABEL= not yet supported"
+        show_devices
+        fatal "Cannot find root by label"
+        ;;
+    UUID=*)
+        # TODO: Find by UUID
+        log "UUID= not yet supported"
+        show_devices
+        fatal "Cannot find root by UUID"
+        ;;
+    /dev/*)
+        # Direct device path
+        ;;
+    *)
+        fatal "Unknown root specification: $ROOT"
+        ;;
+esac
+
+# Wait for the device
+if ! wait_for_device "$ROOT" 30; then
+    show_devices
+    fatal "Root device not found: $ROOT"
+fi
+
+#==============================================================================
+# Mount Root Filesystem
+#==============================================================================
+
+log "Mounting root filesystem: $ROOT"
+
+# Build mount options
+MOUNT_OPTS="-o $ROOTFLAGS"
+if [ -n "$ROOTFSTYPE" ]; then
+    MOUNT_OPTS="$MOUNT_OPTS -t $ROOTFSTYPE"
+fi
+
+# Attempt mount
+if ! mount $MOUNT_OPTS "$ROOT" /mnt/root; then
+    echo ""
+    echo "Failed to mount root filesystem!"
+    echo ""
+    echo "Tried: mount $MOUNT_OPTS $ROOT /mnt/root"
+    echo ""
+    echo "The filesystem type may be incorrect."
+    echo "Try mounting manually:"
+    echo "  mount -t ext4 $ROOT /mnt/root"
+    echo "  mount -t vfat $ROOT /mnt/root"
+    echo "  mount -t squashfs $ROOT /mnt/root"
+    echo ""
+    fatal "Could not mount root filesystem"
+fi
+
+log "Root filesystem mounted successfully"
+
+#==============================================================================
+# Verify Init Binary
+#==============================================================================
+
+log "Checking for init: /mnt/root$INIT"
+
+if [ ! -x "/mnt/root$INIT" ]; then
+    echo ""
+    echo "Init binary not found or not executable!"
+    echo "  Expected: /mnt/root$INIT"
+    echo ""
+    echo "Contents of /mnt/root/sbin/:"
+    ls -la /mnt/root/sbin/ 2>/dev/null || echo "  (not found)"
+    echo ""
+    echo "Contents of /mnt/root/bin/:"
+    ls -la /mnt/root/bin/ 2>/dev/null || echo "  (not found)"
+    echo ""
+    echo "You can try:"
+    echo "  chroot /mnt/root /bin/sh"
+    echo ""
+    fatal "Init binary not found: $INIT"
+fi
+
+#==============================================================================
+# Switch to Real Root
+#==============================================================================
+
+log "Preparing to switch to real root..."
+
+# Move mounted filesystems if needed (for systemd compatibility)
+# mount --move /dev /mnt/root/dev 2>/dev/null
+# mount --move /proc /mnt/root/proc 2>/dev/null
+# mount --move /sys /mnt/root/sys 2>/dev/null
+
+# Or just unmount them (switch_root handles this)
+umount /dev/pts 2>/dev/null
+umount /proc 2>/dev/null
+umount /sys 2>/dev/null
+umount /dev 2>/dev/null
+
+echo ""
+echo "================================================"
+echo "  Switching to real root filesystem"
+echo "  Executing: $INIT"
+echo "================================================"
+echo ""
+
+# Switch to real root and execute init
+exec switch_root /mnt/root "$INIT"
+
+#==============================================================================
+# If we get here, switch_root failed
+#==============================================================================
+
+# Re-mount for debugging
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+fatal "switch_root failed!"

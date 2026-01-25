@@ -1,0 +1,387 @@
+===============================================================================
+                    EMBEDDED LINUX BOOT FLOW - ASCII DIAGRAM
+===============================================================================
+
+This ASCII art diagram shows the complete boot flow from power-on to user space.
+Use this diagram when you need a quick visual reference without rendering tools.
+
+===============================================================================
+                           HIGH-LEVEL BOOT FLOW
+===============================================================================
+
+    +------------------+
+    |   POWER APPLIED  |  ← Physical power connected
+    +--------+---------+
+             |
+             v
+    +------------------+
+    |   CPU RESET      |  ← CPU executes from reset vector
+    |   (Reset Vector) |    Typically 0x00000000 or 0xFFFF0000
+    +--------+---------+
+             |
+             v
+    +------------------+
+    |    ROM CODE      |  ← Vendor-programmed, read-only
+    |   (Boot ROM)     |    - Runs from internal memory
+    +--------+---------+    - Detects boot media
+             |              - Loads SPL/MLO
+             v
+    +------------------+
+    |    SPL / MLO     |  ← Secondary Program Loader
+    |  (First Stage)   |    - Runs from SRAM (~128KB)
+    +--------+---------+    - Initializes DRAM
+             |              - Loads U-Boot
+             v
+    +------------------+
+    |     U-BOOT       |  ← Full-featured bootloader
+    | (Second Stage)   |    - Runs from DRAM
+    +--------+---------+    - Provides shell, commands
+             |              - Loads kernel, DTB, initramfs
+             |
+    +--------+---------+
+    |    ENVIRONMENT   |  ← bootcmd, bootargs, etc.
+    |    VARIABLES     |    - Stored in flash/SD/eMMC
+    +--------+---------+    - Controls boot behavior
+             |
+             v
+    +------------------+     +------------------+
+    |   LINUX KERNEL   | <-- |  DEVICE TREE     |
+    |                  |     |  BLOB (.dtb)     |
+    +--------+---------+     +------------------+
+             |                     |
+             +---------------------+
+             |
+             v
+    +------------------+
+    |   INIT PROCESS   |  ← First user-space process (PID 1)
+    |  (PID 1)         |    - systemd, SysVinit, BusyBox init
+    +--------+---------+
+             |
+             v
+    +------------------+
+    | USER APPLICATIONS|  ← Your embedded application
+    +------------------+
+
+
+===============================================================================
+                         DETAILED MEMORY FLOW
+===============================================================================
+
+BOOT STAGE 0: ROM Code
+~~~~~~~~~~~~~~~~~~~~~~
+
+    CPU Die
+    +-------------------------------------------------------+
+    |                                                       |
+    |   +------------------+     +--------------------+     |
+    |   |  Boot ROM (32KB) |     |  Internal SRAM     |     |
+    |   |  [READ ONLY]     |     |  (64-256KB)        |     |
+    |   |                  |     |                    |     |
+    |   |  * Detect boot   |     |  * Stack           |     |
+    |   |    media         |     |  * Variables       |     |
+    |   |  * Load SPL      |     |  * SPL loaded here |     |
+    |   +------------------+     +--------------------+     |
+    |                                                       |
+    +-------------------------------------------------------+
+
+    Boot Media Detection (Example: AM335x):
+    
+    SYSBOOT[4:0] Pins --> Boot Order
+    +--------------+---------------------------+
+    | Pin Config   | Boot Sequence             |
+    +--------------+---------------------------+
+    | 0b11100      | MMC1, MMC0, UART0, USB    |
+    | 0b11000      | SPI0, MMC0, USB, UART0    |
+    | 0b00000      | UART0, USB                |
+    +--------------+---------------------------+
+
+
+BOOT STAGE 1: SPL (Secondary Program Loader)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    +-------------------+     +------------------------+
+    |   Boot Media      |     |   Internal SRAM        |
+    |                   |     |   (Limited: ~128KB)    |
+    |   +----------+    |     |                        |
+    |   | MLO/SPL  |----|---->|  +------------------+  |
+    |   | (~64KB)  |    |     |  | SPL Code         |  |
+    |   +----------+    |     |  | * Clock init     |  |
+    |   | u-boot   |    |     |  | * DRAM init      |  |
+    |   | (.img)   |    |     |  | * Load U-Boot    |  |
+    |   +----------+    |     |  +------------------+  |
+    |                   |     |  | Stack            |  |
+    +-------------------+     |  +------------------+  |
+                              +------------------------+
+
+    SPL Tasks:
+    1. [CLOCK]    Initialize system clocks (PLL configuration)
+    2. [POWER]    Configure power domains
+    3. [DDR]      Initialize DDR/DRAM controller
+    4. [LOAD]     Load U-Boot from boot media to DRAM
+    5. [JUMP]     Transfer control to U-Boot
+
+
+BOOT STAGE 2: U-Boot
+~~~~~~~~~~~~~~~~~~~~
+
+    External DRAM (512MB - 4GB)
+    +----------------------------------------------------------+
+    |                                                          |
+    |  0x80000000  +------------------+                        |
+    |              |    U-Boot        |  ~1MB                  |
+    |              |    Code + Data   |                        |
+    |  0x80100000  +------------------+                        |
+    |              |    U-Boot Heap   |                        |
+    |              |    & Stack       |                        |
+    |  0x80800000  +------------------+                        |
+    |              |    Kernel Load   |                        |
+    |              |    Address       |  ~10-20MB              |
+    |              |                  |                        |
+    |  0x82000000  +------------------+                        |
+    |              |    DTB Load      |  ~64KB                 |
+    |              |    Address       |                        |
+    |  0x82100000  +------------------+                        |
+    |              |    Initramfs     |  ~5-50MB               |
+    |              |    (Optional)    |                        |
+    |  0x84000000  +------------------+                        |
+    |              |                  |                        |
+    |              |    Free Memory   |                        |
+    |              |                  |                        |
+    +----------------------------------------------------------+
+
+    U-Boot Environment Variables:
+    +---------------------------+------------------------------------------+
+    | Variable     | Example Value                                       |
+    +--------------+-----------------------------------------------------+
+    | bootcmd      | load mmc 0:1 ${kernel_addr} zImage; bootz ...       |
+    | bootargs     | console=ttyS0,115200 root=/dev/mmcblk0p2 rw         |
+    | kernel_addr  | 0x80800000                                          |
+    | fdt_addr     | 0x82000000                                          |
+    | loadaddr     | 0x80800000                                          |
+    +--------------+-----------------------------------------------------+
+
+
+BOOT STAGE 3: Linux Kernel
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Kernel receives control with:
+    
+    Register State (ARM):
+    +----------+--------------------------------------------------+
+    | Register | Content                                          |
+    +----------+--------------------------------------------------+
+    | R0       | 0 (zero)                                         |
+    | R1       | Machine type number (legacy, or 0xFFFFFFFF)      |
+    | R2       | Physical address of DTB                          |
+    | PC       | Kernel entry point                               |
+    +----------+--------------------------------------------------+
+
+    Kernel Boot Sequence:
+    
+         +-----------------+
+         | Entry Point     |  arch/arm/boot/compressed/head.S (if zImage)
+         +--------+--------+  arch/arm/kernel/head.S (if Image)
+                  |
+                  v
+         +-----------------+
+         | Decompress      |  If zImage, decompress to final location
+         | (if zImage)     |
+         +--------+--------+
+                  |
+                  v
+         +-----------------+
+         | Parse DTB       |  Extract device tree for hardware info
+         +--------+--------+
+                  |
+                  v
+         +-----------------+
+         | Setup Memory    |  MMU, page tables, memory zones
+         +--------+--------+
+                  |
+                  v
+         +-----------------+
+         | Init Subsystems |  Scheduler, interrupts, timers, drivers
+         +--------+--------+
+                  |
+                  v
+         +-----------------+
+         | Mount rootfs    |  Based on root= bootarg
+         +--------+--------+
+                  |
+                  v
+         +-----------------+
+         | Execute init    |  /sbin/init or init= bootarg
+         +-----------------+
+
+
+===============================================================================
+                     BOOTARGS FLOW DIAGRAM
+===============================================================================
+
+U-Boot bootargs Variable
++-----------------------------------------------------------------------+
+| bootargs=console=ttyS0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rw |
++-----------------------------------------------------------------------+
+            |
+            v
++------------------------+--------------------------------------------+
+| Parameter              | Usage in Kernel                            |
++------------------------+--------------------------------------------+
+| console=ttyS0,115200   | --> Serial driver: Use ttyS0 as console   |
+|                        |     at 115200 baud, 8N1                    |
++------------------------+--------------------------------------------+
+| root=/dev/mmcblk0p2    | --> VFS: Mount this device as root        |
+|                        |     mmcblk0 = first MMC device            |
+|                        |     p2 = second partition                  |
++------------------------+--------------------------------------------+
+| rootfstype=ext4        | --> VFS: Expect ext4 filesystem           |
++------------------------+--------------------------------------------+
+| rw                     | --> Mount root filesystem read-write      |
++------------------------+--------------------------------------------+
+
+Common bootargs Patterns:
+
+1. SD Card Boot:
+   root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
+
+2. Initramfs Boot:
+   root=/dev/ram0 rdinit=/init
+
+3. NFS Boot:
+   root=/dev/nfs nfsroot=192.168.1.100:/export/rootfs,v3,tcp ip=dhcp
+
+4. Debug Boot:
+   earlyprintk loglevel=8 debug ignore_loglevel
+
+
+===============================================================================
+                     PLATFORM-SPECIFIC BOOT FLOWS
+===============================================================================
+
+RASPBERRY PI (BCM2837/BCM2711)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    GPU Boot ROM (Stage 0)
+           |
+           v
+    +------------------+
+    | bootcode.bin     |  GPU loads this from SD card
+    | (GPU firmware)   |  Runs on VideoCore GPU
+    +--------+---------+
+             |
+             v
+    +------------------+
+    | start.elf        |  Main GPU firmware
+    | (GPU firmware)   |  Reads config.txt
+    +--------+---------+
+             |
+             v
+    +------------------+
+    | config.txt       |  kernel=u-boot.bin (or kernel8.img)
+    | (configuration)  |  dtoverlay=..., gpu_mem=...
+    +--------+---------+
+             |
+             v
+    +------------------+
+    | u-boot.bin       |  Or directly: kernel8.img
+    | (bootloader)     |
+    +--------+---------+
+             |
+             v
+    Normal boot flow continues...
+
+
+BEAGLEBONE BLACK (AM335x)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    ROM Code (Stage 0)
+           |
+           | (Check SYSBOOT pins for boot order)
+           v
+    +------------------+
+    | MLO              |  Must be named "MLO" on FAT partition
+    | (SPL)            |  Located at specific offset on raw MMC
+    +--------+---------+
+             |
+             v
+    +------------------+
+    | u-boot.img       |  Full U-Boot with header
+    +--------+---------+
+             |
+             v
+    Normal boot flow continues...
+
+    SD Card Layout:
+    +------------+-------------------+-------------------+
+    | Offset     | Content           | Notes             |
+    +------------+-------------------+-------------------+
+    | 0x0        | MBR               | Partition table   |
+    | 0x200      | MLO (raw mode)    | For raw boot      |
+    | Partition 1| FAT32: MLO,       | For filesystem    |
+    |            | u-boot.img,       | boot              |
+    |            | zImage, *.dtb     |                   |
+    | Partition 2| ext4 rootfs       | Root filesystem   |
+    +------------+-------------------+-------------------+
+
+
+i.MX6 (Freescale/NXP)
+~~~~~~~~~~~~~~~~~~~~~
+
+    Boot ROM (Stage 0)
+           |
+           | (Check boot fuses and GPIO for boot device)
+           v
+    +------------------+
+    | SPL              |  With i.MX header (imx-mkimage)
+    +--------+---------+
+             |
+             v
+    +------------------+
+    | u-boot.img       |
+    +--------+---------+
+             |
+             v
+    Normal boot flow continues...
+
+
+STM32MP1
+~~~~~~~~
+
+    ROM Code (Stage 0)
+           |
+           v
+    +------------------+
+    | FSBL             |  First Stage Boot Loader
+    | (TF-A BL2)       |  ARM Trusted Firmware
+    +--------+---------+
+             |
+             v
+    +------------------+
+    | SSBL             |  Second Stage Boot Loader
+    | (U-Boot)         |
+    +--------+---------+
+             |
+             v
+    Normal boot flow continues...
+
+
+===============================================================================
+                     QUICK REFERENCE: BOOT STAGE SUMMARY
+===============================================================================
+
++--------+-------------+---------------+------------+-----------------------+
+| Stage  | Component   | Runs From     | Size Limit | Primary Task          |
++--------+-------------+---------------+------------+-----------------------+
+| 0      | ROM Code    | On-chip ROM   | Fixed      | Load Stage 1          |
+| 1      | SPL/MLO     | Internal SRAM | ~128KB     | Init DRAM, load U-Boot|
+| 2      | U-Boot      | DRAM          | ~1MB       | Load kernel, provide  |
+|        |             |               |            | shell, set bootargs   |
+| 3      | Kernel      | DRAM          | ~10-20MB   | Hardware init, mount  |
+|        |             |               |            | rootfs, start init    |
+| 4      | Init        | DRAM          | Varies     | Start user services   |
++--------+-------------+---------------+------------+-----------------------+
+
+
+===============================================================================
+                              END OF DOCUMENT
+===============================================================================

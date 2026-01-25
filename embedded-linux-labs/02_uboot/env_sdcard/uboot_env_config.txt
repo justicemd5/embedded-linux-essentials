@@ -1,0 +1,158 @@
+# U-Boot Environment Configuration Example
+# 
+# This file shows a typical U-Boot environment setup for embedded Linux boot.
+# These variables would be set with 'setenv' and saved with 'saveenv'.
+#
+# Target: Raspberry Pi 3 (adaptable to other boards)
+# 
+# To apply these settings:
+#   1. Boot to U-Boot prompt
+#   2. For each line below, run: setenv <variable> '<value>'
+#   3. Run: saveenv
+#
+# Or convert to binary with: mkenvimage -s 0x4000 -o uboot.env uboot_env_config.txt
+#
+
+#==============================================================================
+# Console Settings
+#==============================================================================
+console=ttyS0,115200
+stderr=serial,vidconsole
+stdin=serial,usbkbd
+stdout=serial,vidconsole
+
+#==============================================================================
+# Boot Delay
+#==============================================================================
+# Time to wait for key press before autoboot (seconds)
+# Set to 0 for immediate boot, -1 to disable autoboot
+bootdelay=3
+
+#==============================================================================
+# Memory Addresses
+#==============================================================================
+# These are board-specific! Check your board's documentation.
+# 
+# Raspberry Pi 3/4:
+loadaddr=0x00080000
+fdt_addr=0x02600000
+ramdisk_addr=0x02700000
+
+# BeagleBone Black would use:
+# loadaddr=0x82000000
+# fdt_addr=0x88000000
+# ramdisk_addr=0x88080000
+
+#==============================================================================
+# File Names
+#==============================================================================
+# Kernel image name
+kernel_file=zImage
+
+# Device tree blob (board-specific)
+fdtfile=bcm2710-rpi-3-b.dtb
+
+# Initramfs (if used)
+ramdisk_file=initramfs.cpio.gz
+
+#==============================================================================
+# Boot Arguments
+#==============================================================================
+# Base arguments (always included)
+baseargs=console=${console} loglevel=4
+
+# SD Card boot arguments
+mmcargs=setenv bootargs ${baseargs} root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
+
+# NFS boot arguments
+nfsargs=setenv bootargs ${baseargs} root=/dev/nfs nfsroot=${serverip}:${nfsroot},v3,tcp ip=dhcp
+
+# Initramfs boot arguments
+initrdargs=setenv bootargs ${baseargs} rdinit=/init
+
+# Debug boot arguments (verbose)
+debugargs=setenv bootargs ${baseargs} root=/dev/mmcblk0p2 rootwait rw earlyprintk debug loglevel=8
+
+#==============================================================================
+# Load Commands
+#==============================================================================
+# Load kernel from MMC
+load_kernel=load mmc 0:1 ${loadaddr} ${kernel_file}
+
+# Load device tree from MMC
+load_fdt=load mmc 0:1 ${fdt_addr} ${fdtfile}
+
+# Load initramfs from MMC (optional)
+load_ramdisk=load mmc 0:1 ${ramdisk_addr} ${ramdisk_file}
+
+#==============================================================================
+# Boot Commands
+#==============================================================================
+# Boot kernel with device tree (no initramfs)
+do_boot=bootz ${loadaddr} - ${fdt_addr}
+
+# Boot kernel with initramfs
+do_boot_initrd=bootz ${loadaddr} ${ramdisk_addr}:${filesize} ${fdt_addr}
+
+#==============================================================================
+# Compound Boot Sequences
+#==============================================================================
+# Standard SD card boot
+mmc_boot=echo "Booting from SD card..."; run mmcargs; run load_kernel; run load_fdt; run do_boot
+
+# NFS development boot (kernel from SD, rootfs from NFS)
+nfs_boot=echo "Booting with NFS root..."; run nfsargs; run load_kernel; run load_fdt; run do_boot
+
+# Initramfs boot
+initrd_boot=echo "Booting with initramfs..."; run initrdargs; run load_kernel; run load_fdt; run load_ramdisk; run do_boot_initrd
+
+# Debug boot (verbose output)
+debug_boot=echo "Debug boot..."; run debugargs; run load_kernel; run load_fdt; run do_boot
+
+#==============================================================================
+# Network Settings (for NFS/TFTP boot)
+#==============================================================================
+# Static IP configuration
+ipaddr=192.168.1.50
+serverip=192.168.1.100
+netmask=255.255.255.0
+gatewayip=192.168.1.1
+
+# NFS root path
+nfsroot=/export/rootfs
+
+# TFTP boot command
+tftp_boot=echo "TFTP boot..."; dhcp; tftp ${loadaddr} ${kernel_file}; tftp ${fdt_addr} ${fdtfile}; run nfsargs; run do_boot
+
+#==============================================================================
+# Fallback Boot Sequence
+#==============================================================================
+# Try SD card first, then network
+fallback_boot=run mmc_boot || run tftp_boot || echo "All boot methods failed!"
+
+#==============================================================================
+# Main Boot Command
+#==============================================================================
+# This is what runs automatically after bootdelay
+bootcmd=run mmc_boot
+
+#==============================================================================
+# Recovery Commands
+#==============================================================================
+# Boot to shell for debugging
+shell_boot=setenv bootargs ${baseargs} root=/dev/mmcblk0p2 rootwait rw init=/bin/sh; run load_kernel; run load_fdt; run do_boot
+
+# Reset environment to defaults
+reset_env=env default -a; saveenv; echo "Environment reset to defaults"
+
+#==============================================================================
+# Utility Commands
+#==============================================================================
+# Show boot configuration
+show_boot=echo "Boot command: ${bootcmd}"; echo "Boot args: ${bootargs}"; echo "Kernel: ${kernel_file}"; echo "DTB: ${fdtfile}"
+
+# Test SD card
+test_mmc=mmc info; mmc part; fatls mmc 0:1
+
+# Test network
+test_net=dhcp; ping ${serverip}

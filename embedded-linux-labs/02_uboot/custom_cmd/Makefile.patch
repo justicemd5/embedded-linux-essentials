@@ -1,0 +1,91 @@
+# Makefile Patch for Custom U-Boot Command
+#
+# This patch adds the cmd_hello.c custom command to the U-Boot build.
+#
+# How to apply:
+#   cd /path/to/u-boot
+#   patch -p1 < /path/to/Makefile.patch
+#
+# Or manually:
+#   Edit cmd/Makefile and add the line shown below
+#
+# After applying, rebuild U-Boot:
+#   make clean
+#   make your_board_defconfig
+#   make -j$(nproc)
+
+--- a/cmd/Makefile
++++ b/cmd/Makefile
+@@ -79,6 +79,9 @@ obj-$(CONFIG_CMD_GPIO) += gpio.o
+ obj-$(CONFIG_CMD_GPT) += gpt.o
+ obj-$(CONFIG_CMD_HASH) += hash.o
+ obj-$(CONFIG_CMD_HVC) += smccc.o
++
++# Custom commands
++obj-y += cmd_hello.o
++
+ obj-$(CONFIG_CMD_I2C) += i2c.o
+ obj-$(CONFIG_CMD_INI) += ini.o
+ obj-$(CONFIG_CMD_IOTRACE) += iotrace.o
+
+# ============================================================================
+# Alternative: Add Kconfig option for conditional compilation
+# ============================================================================
+#
+# 1. Add to cmd/Kconfig:
+#
+# config CMD_HELLO
+#     bool "hello command - example custom command"
+#     default y
+#     help
+#       Enable the 'hello' example command. This demonstrates
+#       how to add custom commands to U-Boot.
+#
+# 2. Change Makefile line to:
+#
+# obj-$(CONFIG_CMD_HELLO) += cmd_hello.o
+#
+# 3. Enable in menuconfig:
+#    Command line interface --->
+#        [*] hello command - example custom command
+#
+# ============================================================================
+# Manual Instructions (if not using patch)
+# ============================================================================
+#
+# 1. Copy cmd_hello.c to u-boot/cmd/ directory
+#
+# 2. Edit u-boot/cmd/Makefile
+#
+# 3. Find an appropriate alphabetical location and add:
+#    obj-y += cmd_hello.o
+#
+#    Or with Kconfig:
+#    obj-$(CONFIG_CMD_HELLO) += cmd_hello.o
+#
+# 4. Rebuild U-Boot:
+#    make clean
+#    make <your_board>_defconfig
+#    make -j$(nproc)
+#
+# 5. Deploy new u-boot.bin to your board
+#
+# 6. Test:
+#    => help hello
+#    => hello
+#    => hello world
+#
+# ============================================================================
+# Troubleshooting
+# ============================================================================
+#
+# Build error: "undefined reference to do_hello"
+#   - Make sure cmd_hello.c is in cmd/ directory
+#   - Make sure Makefile change is correct
+#   - Run 'make clean' and rebuild
+#
+# Command not found:
+#   - Verify the new u-boot.bin was deployed
+#   - Check that the command was compiled: grep "hello" u-boot.map
+#
+# ============================================================================
