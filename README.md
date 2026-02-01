@@ -178,6 +178,8 @@ After completing this course, you will be able to:
 
 ### Software Requirements (Host Machine)
 
+### Option A: Native Installation (Ubuntu)
+
 Install the following on your Linux development machine (Ubuntu 20.04/22.04/24.04 LTS recommended):
 
 ```bash
@@ -202,6 +204,47 @@ export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 ```
 
+### Option B: Docker (Recommended) 🐳
+
+Use the provided Docker environment for a consistent, pre-configured setup that works on any platform.
+
+```bash
+# Build the Docker image
+docker build -t embedded-linux-essentials .
+
+# Run interactive development shell
+docker run -it --rm -v $(pwd):/workspace embedded-linux-essentials
+
+# Or use docker-compose (recommended)
+docker-compose run dev
+```
+
+**For serial port access (connecting to BeagleBone Black):**
+
+```bash
+# Linux - with device access
+docker run -it --rm --privileged -v /dev:/dev -v $(pwd):/workspace embedded-linux-essentials
+
+# Or with docker-compose
+docker-compose run dev-serial
+
+# Inside container, connect to BBB:
+picocom -b 115200 /dev/ttyACM0
+```
+
+**For network boot server (TFTP + NFS):**
+
+```bash
+# Start network boot services
+docker-compose up -d netboot
+
+# Files go in:
+#   ./tftp/  → TFTP server root (/srv/tftp)
+#   ./nfs/   → NFS exports (/srv/nfs)
+```
+
+See [Docker Setup Guide](#-docker-environment) below for detailed instructions.
+
 ### Knowledge Prerequisites
 
 | Level | Required Knowledge |
@@ -217,6 +260,9 @@ export CROSS_COMPILE=arm-linux-gnueabihf-
 ```
 embedded-linux-essentials/
 ├── README.md                      # This file - Course overview
+├── Dockerfile                     # Docker development environment
+├── docker-compose.yml             # Docker Compose services
+├── docker-entrypoint.sh           # Container startup script
 ├── build_all.sh                   # Master build orchestration script
 │
 ├── diagrams/                      # Visual learning aids
@@ -268,6 +314,169 @@ embedded-linux-essentials/
 
 ---
 
+## � Docker Environment
+
+The recommended way to use this course is with Docker, which provides a consistent, pre-configured development environment.
+
+### Docker Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/embedded-linux-essentials.git
+cd embedded-linux-essentials
+
+# Build the Docker image (first time only, takes ~10 minutes)
+docker build -t embedded-linux-essentials .
+
+# Start development environment
+docker-compose run dev
+```
+
+### Available Docker Services
+
+| Service | Command | Description |
+|---------|---------|-------------|
+| `dev` | `docker-compose run dev` | General development (kernel, U-Boot builds) |
+| `dev-serial` | `docker-compose run dev-serial` | With serial port access to BBB |
+| `netboot` | `docker-compose up -d netboot` | TFTP + NFS network boot server |
+| `yocto` | `docker-compose run yocto` | Yocto builds (16GB+ RAM recommended) |
+| `buildroot` | `docker-compose run buildroot` | Buildroot builds |
+
+### Docker Usage Examples
+
+#### Basic Development
+
+```bash
+# Start interactive shell
+docker-compose run dev
+
+# Inside container:
+cd /workspace
+./02_uboot/build_uboot.sh      # Build U-Boot
+./03_kernel/build_kernel.sh    # Build kernel
+```
+
+#### Connecting to BeagleBone Black Serial Console
+
+```bash
+# Start with device access (Linux host)
+docker-compose run dev-serial
+
+# Inside container:
+picocom -b 115200 /dev/ttyACM0
+
+# Or use minicom:
+minicom -D /dev/ttyACM0 -b 115200
+```
+
+#### Network Boot Server Setup
+
+```bash
+# Create directories for TFTP and NFS
+mkdir -p tftp nfs/rootfs
+
+# Copy kernel and DTB to TFTP
+cp zImage am335x-boneblack.dtb tftp/
+
+# Extract rootfs to NFS
+sudo tar -xf rootfs.tar -C nfs/rootfs
+
+# Start network boot server
+docker-compose up -d netboot
+
+# Check status
+docker-compose logs netboot
+```
+
+#### Building with Yocto
+
+```bash
+# Yocto needs significant resources (16GB+ RAM, 100GB+ disk)
+docker-compose run yocto
+
+# Inside container:
+cd /workspace/exercises/advanced/08_yocto
+./scripts/setup_yocto.sh
+./scripts/build_image.sh
+```
+
+### Docker Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DOCKER ENVIRONMENT                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                    embedded-linux-essentials                        │   │
+│  │                         (Docker Image)                              │   │
+│  │                                                                     │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │   │
+│  │  │ Cross-      │  │ Build       │  │ Network     │                │   │
+│  │  │ Compiler    │  │ Tools       │  │ Services    │                │   │
+│  │  │             │  │             │  │             │                │   │
+│  │  │ arm-linux-  │  │ make, gcc   │  │ TFTP, NFS   │                │   │
+│  │  │ gnueabihf-  │  │ flex, bison │  │ DHCP        │                │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘                │   │
+│  │                                                                     │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │   │
+│  │  │ U-Boot      │  │ Serial      │  │ Debug       │                │   │
+│  │  │ Tools       │  │ Tools       │  │ Tools       │                │   │
+│  │  │             │  │             │  │             │                │   │
+│  │  │ mkimage     │  │ picocom     │  │ gdb-multi   │                │   │
+│  │  │ dtc         │  │ minicom     │  │ strace      │                │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘                │   │
+│  │                                                                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  Volumes:                                                                   │
+│  ─────────                                                                  │
+│  • /workspace     ← Repository mount (your code)                            │
+│  • /srv/tftp      ← TFTP server root                                        │
+│  • /srv/nfs       ← NFS exports                                             │
+│  • Named volumes  ← Build caches (persist between runs)                     │
+│                                                                             │
+│  Device Access (--privileged or dev-serial):                               │
+│  ────────────────────────────────────────────                              │
+│  • /dev/ttyACM0   ← BeagleBone Black USB serial                            │
+│  • /dev/ttyUSB*   ← USB-to-serial adapters                                 │
+│  • /dev/sd*       ← SD card access                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Windows and macOS Notes
+
+Docker works on Windows (WSL2) and macOS, but with limitations:
+
+| Feature | Linux | Windows (WSL2) | macOS |
+|---------|-------|----------------|-------|
+| Serial port access | ✅ Full | ⚠️ Via USB/IP | ⚠️ Limited |
+| NFS server | ✅ Full | ❌ Host network needed | ❌ Host network needed |
+| Performance | ✅ Native | ✅ Good (WSL2) | ⚠️ Slower (VM) |
+| SD card write | ✅ Direct | ⚠️ Via WSL | ⚠️ Via disk utility |
+
+**Windows Recommendations:**
+```powershell
+# Use WSL2 with Docker Desktop
+# Access serial via usbipd-win:
+# 1. Install usbipd-win on Windows
+# 2. usbipd wsl attach --busid <busid>
+# 3. In WSL: ls /dev/ttyACM0
+```
+
+**macOS Recommendations:**
+```bash
+# For serial access, use native tools outside Docker:
+brew install picocom
+picocom -b 115200 /dev/tty.usbmodem*
+
+# Use Docker for builds only
+docker-compose run dev
+```
+
+---
+
 ## 🚀 Quick Start
 
 ### Step 1: Clone and Prepare
@@ -277,7 +486,10 @@ embedded-linux-essentials/
 git clone https://github.com/your-username/embedded-linux-essentials.git
 cd embedded-linux-essentials
 
-# Set up environment variables (add to ~/.bashrc)
+# Option A: Use Docker (recommended)
+docker-compose run dev
+
+# Option B: Native install - set environment variables
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 ```

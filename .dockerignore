@@ -1,0 +1,78 @@
+# =============================================================================
+# Docker Ignore File
+# =============================================================================
+# Exclude files and directories that shouldn't be sent to the Docker daemon
+# during build context creation.
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build outputs (will use named volumes instead)
+build/
+output/
+downloads/
+
+# Yocto/Buildroot builds (very large)
+yocto/
+buildroot/
+buildroot-*/
+poky/
+build-*
+
+# Kernel/U-Boot source trees (if present)
+linux/
+linux-*/
+u-boot/
+u-boot-*/
+
+# Toolchain downloads
+toolchain/
+gcc-*/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation builds
+docs/_build/
+
+# Test outputs
+test-results/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Archives (will be in downloads/)
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+
+# SD card images
+*.img
+*.iso
+
+# Compiled objects (if any)
+*.o
+*.ko
+*.mod.c
+*.mod.o
+*.order
+*.symvers
+
+# Backup files
+*.bak
+*.backup

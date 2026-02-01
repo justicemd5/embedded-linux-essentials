@@ -1,0 +1,191 @@
+# =============================================================================
+# Embedded Linux Essentials - Docker Compose Configuration
+# =============================================================================
+# This file provides multiple service configurations for different use cases
+#
+# Usage:
+#   docker-compose up -d dev          # Start development environment
+#   docker-compose run dev            # Interactive shell
+#   docker-compose up -d netboot      # Start network boot server
+#   docker-compose down               # Stop all services
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # Development Environment (Default)
+  # ===========================================================================
+  # Use this for general development, kernel building, etc.
+  # 
+  # Run: docker-compose run dev
+  # ===========================================================================
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: embedded-linux-essentials:latest
+    container_name: embedded-linux-dev
+    hostname: embedded-dev
+    stdin_open: true
+    tty: true
+    
+    # Mount the repository as workspace
+    volumes:
+      - .:/workspace
+      # Persist build artifacts
+      - build-cache:/workspace/build
+      - download-cache:/workspace/downloads
+    
+    # Environment variables
+    environment:
+      - ARCH=arm
+      - CROSS_COMPILE=arm-linux-gnueabihf-
+      - TERM=xterm-256color
+    
+    # Working directory
+    working_dir: /workspace
+
+  # ===========================================================================
+  # Development with Serial Port Access
+  # ===========================================================================
+  # Use this when you need to connect to BeagleBone Black via USB serial
+  #
+  # Run: docker-compose run dev-serial
+  # ===========================================================================
+  dev-serial:
+    extends:
+      service: dev
+    container_name: embedded-linux-serial
+    
+    # Privileged mode required for device access
+    privileged: true
+    
+    # Mount /dev for serial port access
+    volumes:
+      - .:/workspace
+      - /dev:/dev
+      - build-cache:/workspace/build
+      - download-cache:/workspace/downloads
+    
+    # Add dialout group for serial access
+    group_add:
+      - dialout
+
+  # ===========================================================================
+  # Network Boot Server (TFTP + NFS)
+  # ===========================================================================
+  # Use this to set up a network boot server for BeagleBone Black
+  #
+  # Run: docker-compose up -d netboot
+  # ===========================================================================
+  netboot:
+    extends:
+      service: dev
+    container_name: embedded-linux-netboot
+    hostname: netboot-server
+    
+    # Required for NFS and TFTP
+    privileged: true
+    
+    # Network configuration
+    network_mode: host
+    
+    # Start services
+    environment:
+      - ARCH=arm
+      - CROSS_COMPILE=arm-linux-gnueabihf-
+      - START_SERVICES=true
+    
+    # Mount points for TFTP and NFS
+    volumes:
+      - .:/workspace
+      - ./tftp:/srv/tftp
+      - ./nfs:/srv/nfs
+      - build-cache:/workspace/build
+      - download-cache:/workspace/downloads
+    
+    # Override command to start services and keep running
+    command: >
+      bash -c "
+        sudo service tftpd-hpa start &&
+        sudo service nfs-kernel-server start &&
+        echo 'TFTP Server: /srv/tftp' &&
+        echo 'NFS Server: /srv/nfs' &&
+        tail -f /dev/null
+      "
+
+  # ===========================================================================
+  # Yocto Build Environment
+  # ===========================================================================
+  # Use this for Yocto/OpenEmbedded builds (requires significant resources)
+  #
+  # Run: docker-compose run yocto
+  # ===========================================================================
+  yocto:
+    extends:
+      service: dev
+    container_name: embedded-linux-yocto
+    hostname: yocto-builder
+    
+    # Yocto needs a lot of resources
+    # Adjust these based on your system
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
+    
+    # Additional volumes for Yocto
+    volumes:
+      - .:/workspace
+      - yocto-cache:/workspace/yocto
+      - yocto-downloads:/workspace/yocto-downloads
+      - yocto-sstate:/workspace/yocto-sstate
+      - build-cache:/workspace/build
+      - download-cache:/workspace/downloads
+    
+    # Yocto environment
+    environment:
+      - ARCH=arm
+      - CROSS_COMPILE=arm-linux-gnueabihf-
+      - LANG=en_US.UTF-8
+      - LC_ALL=en_US.UTF-8
+
+  # ===========================================================================
+  # Buildroot Build Environment
+  # ===========================================================================
+  # Use this for Buildroot builds
+  #
+  # Run: docker-compose run buildroot
+  # ===========================================================================
+  buildroot:
+    extends:
+      service: dev
+    container_name: embedded-linux-buildroot
+    hostname: buildroot-builder
+    
+    # Additional volumes for Buildroot
+    volumes:
+      - .:/workspace
+      - buildroot-dl:/workspace/buildroot-dl
+      - build-cache:/workspace/build
+      - download-cache:/workspace/downloads
+
+# =============================================================================
+# Named Volumes for Caching
+# =============================================================================
+volumes:
+  build-cache:
+    name: embedded-linux-build-cache
+  download-cache:
+    name: embedded-linux-download-cache
+  yocto-cache:
+    name: embedded-linux-yocto-cache
+  yocto-downloads:
+    name: embedded-linux-yocto-downloads
+  yocto-sstate:
+    name: embedded-linux-yocto-sstate
+  buildroot-dl:
+    name: embedded-linux-buildroot-dl
