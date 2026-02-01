@@ -180,9 +180,12 @@ fdt_addr=0x82000000       # Device tree load address
 | Image | Description | Typical Use |
 |-------|-------------|-------------|
 | `Image` | Uncompressed kernel | ARM64, fast boot |
-| `zImage` | Compressed, self-extracting | ARM32 |
+| `zImage` | Compressed, self-extracting | ARM32 (BBB) |
 | `uImage` | U-Boot wrapper around zImage | Legacy U-Boot |
+| `FIT Image` | Multi-component, signed | Secure boot |
 | `vmlinuz` | Compressed for x86 | Desktop Linux |
+
+> 📚 **For comprehensive coverage of kernel image formats including FIT images, see [Kernel Image Types Guide](kernel_image_types.md)**
 
 **Kernel Configuration**:
 ```bash

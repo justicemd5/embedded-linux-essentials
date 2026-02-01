@@ -54,6 +54,13 @@ chmod +x scripts/*.sh
 
 ---
 
+## Prerequisites
+
+Before starting this exercise, make sure you understand:
+- **FIT Images** - See [Kernel Image Types Guide](../../docs/kernel_image_types.md) for comprehensive coverage of FIT images, including structure, creation, and comparison with other formats (zImage, uImage)
+
+---
+
 ## Objective
 
 Implement a verified boot chain with signed images to ensure only authorized software runs.

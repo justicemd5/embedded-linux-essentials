@@ -1,6 +1,15 @@
 # Linux Kernel Building Guide
 
+> **⚠️ AI-GENERATED CONTENT DISCLAIMER**
+> This material was auto-generated and should be validated before use in production.
+
 A comprehensive guide to building the Linux kernel for embedded systems.
+
+## Related Guides
+
+- **[Kernel Image Types](kernel_image_types.md)** - Understanding zImage, uImage, FIT images, and when to use each format
+
+---
 
 ## Why Kernel Building Matters
 
