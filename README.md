@@ -1,8 +1,9 @@
-# Embedded Linux Labs
+# Embedded Linux Essentials
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform: BeagleBone Black](https://img.shields.io/badge/Platform-BeagleBone%20Black%20Rev.C-green)](https://beagleboard.org/black)
 [![Auto-Generated](https://img.shields.io/badge/Content-AI%20Generated-purple)]()
+[![Exercises: 10+](https://img.shields.io/badge/Exercises-10%2B%20Advanced-blue)]()
 
 ---
 
@@ -17,99 +18,205 @@
 > - Use at their own risk
 >
 > **Generated:** January 2024  
-> **Last Updated:** January 2026
+> **Last Updated:** February 2026
 
 ---
 
-## 📝 Initial Generation Query
+## 📖 Course Overview
 
-This repository was generated from the following prompt:
+This is a **complete, hands-on course** for learning Embedded Linux system bring-up, from power-on to production-ready systems. The course uses the **BeagleBone Black Rev C** as the primary target platform, providing real-world experience with ARM Cortex-A8 embedded systems.
 
-> *"Create a complete GitHub repository named 'embedded-linux-labs' for teaching Embedded Linux system bring-up using BeagleBone Black Rev. C as the primary target. Generate all source code, scripts, diagrams, and documentation with no placeholders. Include labs covering boot flow, U-Boot (including SPL), kernel building, device trees, initramfs, NFS boot, and recovery techniques. All tutorials should include conceptual explanations, real-world importance, step-by-step commands, ASCII diagrams, common mistakes/debugging tips, and 'what you learned' sections. Include graded exercises (beginner/intermediate/advanced)."*
-
----
-
-A comprehensive, hands-on educational repository for learning Embedded Linux system bring-up, boot flow, and development. This repository is designed for engineers, students, and professionals who want to deeply understand how Embedded Linux systems work from power-on to user space.
-
-## 🎯 Learning Objectives
-
-After completing these labs, you will be able to:
-
-- ✅ Configure and compile Embedded Linux images from source
-- ✅ Deeply understand the complete boot flow (ROM → SPL → U-Boot → Kernel → Userspace)
-- ✅ Understand bootloader stages and design constraints
-- ✅ Recover a "bricked" board using pre-built images and TFTP/UART
-- ✅ Understand how all Embedded Linux components link together
-- ✅ Use bootargs to boot via SD card, initramfs, and NFS
-- ✅ Work confidently with U-Boot internals and environment variables
-- ✅ Persist U-Boot environment to SD card
-- ✅ Add custom U-Boot commands in C
-- ✅ Build and customize the Linux kernel
-- ✅ Understand and modify device trees
-- ✅ Create minimal initramfs filesystems
-- ✅ Set up NFS boot for rapid development
-
-## 📋 Prerequisites
-
-### Hardware (Required)
-
-| Item | Specification | Purpose |
-|------|---------------|---------|
-| **BeagleBone Black Rev. C** | AM335x Cortex-A8, 512MB DDR3 | Primary target platform |
-| **microSD Card** | 8GB minimum, Class 10 | Boot media and root filesystem |
-| **Power Supply** | 5V / 3A DC barrel jack | Reliable power (USB may be insufficient) |
-| **USB Programming Cable** | Mini-USB to USB-A | Serial console access via /dev/ttyACM0 |
-| **HDMI Cable** | Micro-HDMI to HDMI | Optional: Video output |
-| **Ethernet Cable** | CAT5e or better | NFS/TFTP network boot labs |
+### What Makes This Course Unique
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    BEAGLEBONE BLACK REV. C SETUP                            │
+│                        EMBEDDED LINUX ESSENTIALS                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│    ┌─────────────────────────────────────────────────────────┐              │
-│    │                  BeagleBone Black                       │              │
-│    │  ┌──────┐                                    ┌──────┐   │              │
-│    │  │ SD   │◄── 8GB microSD Card                │ ETH  │◄──┼── Ethernet  │
-│    │  │ Slot │    (Boot media)                    │ Port │   │   Cable     │
-│    │  └──────┘                                    └──────┘   │              │
-│    │                                                         │              │
-│    │  ┌──────┐                                    ┌──────┐   │              │
-│    │  │ USB  │◄── USB Programming Cable           │ 5V   │◄──┼── 5V/3A PSU │
-│    │  │ Mini │    (Serial: /dev/ttyACM0)          │ Jack │   │             │
-│    │  └──────┘                                    └──────┘   │              │
-│    │                                                         │              │
-│    │  ┌──────┐    BOOT button (hold for SD boot)             │              │
-│    │  │ uHDMI│◄── Micro-HDMI Cable (optional)                │              │
-│    │  └──────┘                                               │              │
-│    └─────────────────────────────────────────────────────────┘              │
+│   📚 THEORY          💻 PRACTICE         🔧 REAL HARDWARE                  │
+│   ─────────          ──────────          ───────────────                   │
+│   Deep conceptual    Ready-to-run       BeagleBone Black                   │
+│   documentation      scripts & code     Rev C target                       │
 │                                                                             │
-│    BOOT MODES:                                                              │
-│    • Normal: Boots from eMMC (onboard flash)                                │
-│    • SD Boot: Hold BOOT button during power-on → boots from SD card         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   7 Core Labs          10+ Advanced         Certification                  │
+│   ───────────          Exercises            Project                        │
+│   Boot Flow            Kernel Modules       Production-Ready               │
+│   U-Boot               PREEMPT_RT           A/B Updates                    │
+│   Kernel               Secure Boot          Optimized Boot                 │
+│   Device Tree          Buildroot/Yocto      Custom Init                    │
+│   Initramfs            Custom Init                                         │
+│   NFS Boot             Network Boot                                        │
+│   Recovery             A/B Partitions                                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> ⚠️ **Important**: The USB port alone may not provide sufficient power. Always use the 5V/3A barrel jack power supply for reliable operation, especially when using peripherals.
+### Course Structure
 
-### Software (Host Machine)
-- Linux host machine (Ubuntu 20.04/22.04/24.04 LTS recommended)
-- Cross-compilation toolchain: `arm-linux-gnueabihf-` (32-bit ARM)
-- Git, make, gcc, flex, bison, libssl-dev
-- TFTP server and NFS server (for network boot labs)
-- minicom or picocom (for serial console)
+The course is organized into **three progressive tiers**:
 
-### Knowledge
-- Basic Linux command line proficiency
-- Basic C programming understanding
-- Familiarity with Makefiles (helpful but not required)
+| Tier | Content | Time Estimate | Target Audience |
+|------|---------|---------------|-----------------|
+| **Foundation** | 7 Core Labs + Beginner Exercises | 2-3 weeks | New to Embedded Linux |
+| **Development** | Intermediate Exercises | 1-2 weeks | Some Linux experience |
+| **Mastery** | 10 Advanced Exercises + Certification | 4-6 weeks | Professional development |
+
+### Target Platform: BeagleBone Black Rev C
+
+Every script, configuration, and example in this course is designed for:
+
+| Component | Specification |
+|-----------|---------------|
+| **Board** | BeagleBone Black Rev C |
+| **SoC** | TI AM335x (Cortex-A8 @ 1GHz) |
+| **RAM** | 512MB DDR3L |
+| **Storage** | 4GB eMMC + microSD slot |
+| **Serial** | /dev/ttyACM0 (USB), ttyO0 (kernel) |
+| **Cross-Compiler** | arm-linux-gnueabihf- |
+| **Architecture** | ARMv7-A (32-bit) |
+
+---
+
+## 🎯 Learning Objectives
+
+After completing this course, you will be able to:
+
+### Foundation Level
+- ✅ Understand the complete boot flow (ROM → SPL → U-Boot → Kernel → Userspace)
+- ✅ Configure serial console and capture boot logs
+- ✅ Work with U-Boot environment and commands
+- ✅ Build and deploy the Linux kernel from source
+- ✅ Understand device tree structure and overlays
+
+### Development Level
+- ✅ Create and customize initramfs filesystems
+- ✅ Set up NFS boot for rapid development cycles
+- ✅ Recover "bricked" boards using TFTP/UART
+- ✅ Add custom U-Boot commands in C
+- ✅ Configure kernel options for specific hardware
+
+### Mastery Level
+- ✅ Write loadable kernel modules with /proc interfaces
+- ✅ Debug kernel panics and analyze crash dumps
+- ✅ Optimize boot time to under 5 seconds
+- ✅ Implement A/B partition schemes with rollback
+- ✅ Apply PREEMPT_RT patches for real-time systems
+- ✅ Configure secure boot with signed images
+- ✅ Build complete systems with Buildroot and Yocto
+- ✅ Create custom init systems without systemd/busybox
+- ✅ Set up complete network boot infrastructure
+
+---
+
+## 📋 Prerequisites
+
+### Hardware Requirements
+
+| Item | Specification | Purpose |
+|------|---------------|---------|
+| **BeagleBone Black Rev C** | AM335x Cortex-A8, 512MB DDR3 | Primary target platform |
+| **microSD Card** | 8GB minimum, Class 10 recommended | Boot media and root filesystem |
+| **5V Power Supply** | 5V / 2A DC barrel jack (5.5mm/2.1mm) | **Required** - USB power insufficient |
+| **USB Cable** | Mini-USB to USB-A | Serial console via /dev/ttyACM0 |
+| **Ethernet Cable** | CAT5e or better | Network boot labs (Labs 6, 10) |
+| **SD Card Reader** | USB preferred | Writing boot images |
+
+> ⚠️ **Critical**: The USB port alone provides only 500mA which is insufficient for reliable operation. Always use the 5V barrel jack power supply, especially when using peripherals or during kernel builds.
+
+### BeagleBone Black Connection Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    BEAGLEBONE BLACK REV C SETUP                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│         ┌──────────────────────────────────────────────────┐                │
+│         │              BeagleBone Black Rev C              │                │
+│         │                                                  │                │
+│         │  [S2 BOOT]  Hold during power-on for SD boot    │                │
+│         │      ○                                           │                │
+│         │                                                  │                │
+│         │  ┌────────┐    AM335x     ┌────────┐            │                │
+│         │  │ microSD│    Cortex-A8  │ Ethernet│◄──────────┼── CAT5e       │
+│         │  │  Slot  │    @ 1GHz     │  RJ-45  │            │   Cable       │
+│         │  └────────┘               └────────┘            │                │
+│         │      ▲                                           │                │
+│         │      │                    ┌────────┐            │                │
+│         │   8GB+ SD                 │  5V DC │◄───────────┼── 5V/2A PSU   │
+│         │   Class 10                │  Jack  │            │   (Required!) │
+│         │                           └────────┘            │                │
+│         │  ┌────────┐                                     │                │
+│         │  │Mini-USB│◄────────────────────────────────────┼── USB Cable   │
+│         │  │  Port  │  Serial Console: /dev/ttyACM0       │   to Host PC  │
+│         │  └────────┘  (Built-in FTDI chip)               │                │
+│         │                                                  │                │
+│         │  ┌────────┐               ┌────────────┐        │                │
+│         │  │ μHDMI  │               │   4 LEDs   │        │                │
+│         │  └────────┘               │  USR0-USR3 │        │                │
+│         │   (Optional)              └────────────┘        │                │
+│         │                                                  │                │
+│         └──────────────────────────────────────────────────┘                │
+│                                                                             │
+│    BOOT MODES:                                                              │
+│    ─────────────                                                            │
+│    • Default: Boot from 4GB eMMC (onboard flash)                            │
+│    • SD Boot: Hold S2 (BOOT) button while applying power                    │
+│               Release after power LED illuminates (~2 seconds)              │
+│    • The S2 button is located near the SD card slot                         │
+│                                                                             │
+│    LED INDICATORS (USR0-USR3):                                              │
+│    ───────────────────────────                                              │
+│    • USR0 (D2): Heartbeat - kernel is running                               │
+│    • USR1 (D3): SD card activity                                            │
+│    • USR2 (D4): CPU activity                                                │
+│    • USR3 (D5): eMMC activity                                               │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Software Requirements (Host Machine)
+
+Install the following on your Linux development machine (Ubuntu 20.04/22.04/24.04 LTS recommended):
+
+```bash
+# Update package lists
+sudo apt-get update
+
+# Install essential build tools
+sudo apt-get install -y \
+    git bc bison flex libssl-dev make libc6-dev libncurses5-dev \
+    crossbuild-essential-armhf \
+    u-boot-tools device-tree-compiler \
+    tftpd-hpa nfs-kernel-server \
+    minicom picocom screen \
+    kmod cpio
+
+# Verify cross-compiler installation
+arm-linux-gnueabihf-gcc --version
+# Expected: arm-linux-gnueabihf-gcc (Ubuntu ...) 11.x.x or later
+
+# Set environment variables (add to ~/.bashrc for persistence)
+export ARCH=arm
+export CROSS_COMPILE=arm-linux-gnueabihf-
+```
+
+### Knowledge Prerequisites
+
+| Level | Required Knowledge |
+|-------|-------------------|
+| **Foundation** | Basic Linux command line, file navigation |
+| **Development** | Shell scripting, C programming basics |
+| **Mastery** | Kernel concepts, debugging, build systems |
+
+---
 
 ## 📁 Repository Structure
 
 ```
-embedded-linux-labs/
-├── README.md                      # This file
+embedded-linux-essentials/
+├── README.md                      # This file - Course overview
 ├── build_all.sh                   # Master build orchestration script
 │
 ├── diagrams/                      # Visual learning aids
@@ -117,13 +224,13 @@ embedded-linux-labs/
 │   ├── boot_flow_ascii.txt        # ASCII art boot flow
 │   └── component_linkage.md       # How components connect
 │
-├── docs/                          # Comprehensive documentation
+├── docs/                          # Comprehensive documentation (Theory)
 │   ├── embedded_linux_components.md
 │   ├── bootloader_stages.md
 │   ├── bootloader_design_constraints.md
-│   ├── spl_guide.md               # SPL (Secondary Program Loader) deep-dive
+│   ├── spl_guide.md
 │   ├── uboot_overview.md
-│   ├── uboot_spl_relationship.md  # How SPL and U-Boot work together
+│   ├── uboot_spl_relationship.md
 │   ├── kernel_building.md
 │   ├── device_tree.md
 │   ├── initramfs.md
@@ -132,222 +239,396 @@ embedded-linux-labs/
 │   └── recovery_guide.md
 │
 ├── 01_boot_flow/                  # Lab 1: Understanding Boot Flow
-│   └── README.md
-│
 ├── 02_uboot/                      # Lab 2: U-Boot Bootloader
-│   ├── README.md
-│   ├── build_uboot.sh
-│   ├── env_sdcard/                # Persisting U-Boot environment
-│   │   ├── README.md
-│   │   └── uboot_env_config.txt
-│   └── custom_cmd/                # Adding custom U-Boot commands
-│       ├── README.md
-│       ├── cmd_hello.c
-│       └── Makefile.patch
-│
-├── 03_kernel/                     # Lab 3: Linux Kernel
-│   ├── README.md
-│   ├── build_kernel.sh
-│   └── kernel_config_notes.md
-│
-├── 04_device_tree/                # Lab 4: Device Tree
-│   ├── README.md
-│   └── led_example.dts
-│
+│   ├── env_sdcard/                #   └── Environment persistence
+│   └── custom_cmd/                #   └── Custom commands in C
+├── 03_kernel/                     # Lab 3: Linux Kernel Building
+├── 04_device_tree/                # Lab 4: Device Tree Overlays
 ├── 05_initramfs/                  # Lab 5: Initial RAM Filesystem
-│   ├── README.md
-│   ├── create_initramfs.sh
-│   └── init
+├── 06_nfs_boot/                   # Lab 6: Network Boot Setup
+├── 07_recovery/                   # Lab 7: Board Recovery Techniques
 │
-├── 06_nfs_boot/                   # Lab 6: Network Boot
-│   ├── README.md
-│   └── setup_nfs_server.md
-│
-├── 07_recovery/                   # Lab 7: Board Recovery
-│   ├── README.md
-│   ├── tftp_recovery.md
-│   └── uart_debugging.md
-│
-└── exercises/                     # Graded exercises
-    ├── beginner.md
-    ├── intermediate.md
-    └── advanced.md
+└── exercises/                     # Graded exercises (3 tiers)
+    ├── beginner.md                #   └── Entry-level exercises
+    ├── intermediate.md            #   └── Mid-level challenges
+    └── advanced/                  #   └── Expert-level projects
+        ├── README.md
+        ├── 01_kernel_module/      # Loadable kernel modules
+        ├── 02_debug_kernel_panic/ # Crash analysis and debugging
+        ├── 03_boot_optimization/  # Boot time optimization
+        ├── 04_ab_partition/       # A/B update schemes
+        ├── 05_preempt_rt/         # Real-time Linux
+        ├── 06_secure_boot/        # Verified boot chain
+        ├── 07_buildroot/          # Buildroot system builds
+        ├── 08_yocto/              # Yocto/OpenEmbedded
+        ├── 09_custom_init/        # Custom init without systemd
+        ├── 10_network_boot/       # Complete PXE/TFTP/NFS setup
+        └── certification_project.md  # Capstone project
 ```
+
+---
 
 ## 🚀 Quick Start
 
-### 1. Clone and Set Up Environment
+### Step 1: Clone and Prepare
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/embedded-linux-labs.git
-cd embedded-linux-labs
+git clone https://github.com/your-username/embedded-linux-essentials.git
+cd embedded-linux-essentials
 
-# Install host dependencies (Ubuntu/Debian)
-sudo apt-get update
-sudo apt-get install -y \
-    git bc bison flex libssl-dev make libc6-dev libncurses5-dev \
-    crossbuild-essential-armhf crossbuild-essential-arm64 \
-    u-boot-tools device-tree-compiler \
-    tftpd-hpa nfs-kernel-server \
-    minicom picocom
-
-# Set up cross-compiler (choose based on your target)
-# For 32-bit ARM (RPi 2/3, BeagleBone):
-export CROSS_COMPILE=arm-linux-gnueabihf-
+# Set up environment variables (add to ~/.bashrc)
 export ARCH=arm
-
-# For 64-bit ARM (RPi 3/4 in 64-bit mode):
-export CROSS_COMPILE=aarch64-linux-gnu-
-export ARCH=arm64
+export CROSS_COMPILE=arm-linux-gnueabihf-
 ```
 
-### 2. Connect to Your BeagleBone Black
+### Step 2: Connect to BeagleBone Black
 
 ```bash
-# Connect USB programming cable - BBB has built-in USB-to-Serial
-# The BBB appears as /dev/ttyACM0 when connected via USB
-dmesg | grep tty
-# Look for: cdc_acm 1-1:1.0: ttyACM0: USB ACM device
+# Connect USB cable to BBB - it appears as /dev/ttyACM0
+# Check connection:
+dmesg | grep -i acm
+# Expected: cdc_acm 1-1:1.0: ttyACM0: USB ACM device
 
 # Open serial console (115200 baud, 8N1)
-minicom -D /dev/ttyACM0 -b 115200
-
-# Or use picocom
 picocom -b 115200 /dev/ttyACM0
 
-# Or use screen
+# Alternative tools:
+minicom -D /dev/ttyACM0 -b 115200
 screen /dev/ttyACM0 115200
 ```
 
-> **Note**: BeagleBone Black has a built-in FTDI chip, so no external USB-to-UART adapter is needed. Just connect the USB programming cable.
+> **Tip**: BeagleBone Black has a built-in USB-to-Serial chip. No external FTDI adapter needed!
 
-### 3. Follow the Labs in Order
-
-1. **[01_boot_flow](01_boot_flow/README.md)** - Understand the complete boot sequence
-2. **[02_uboot](02_uboot/README.md)** - Build and customize U-Boot
-3. **[03_kernel](03_kernel/README.md)** - Build the Linux kernel
-4. **[04_device_tree](04_device_tree/README.md)** - Understand device trees
-5. **[05_initramfs](05_initramfs/README.md)** - Create initial RAM filesystem
-6. **[06_nfs_boot](06_nfs_boot/README.md)** - Set up network boot
-7. **[07_recovery](07_recovery/README.md)** - Learn recovery techniques
-
-### 4. Build Everything
+### Step 3: Boot from SD Card
 
 ```bash
-# Build all components for BeagleBone Black (primary target)
-./build_all.sh bbb
-
-# Alternative targets (may require additional configuration)
-./build_all.sh rpi3     # Raspberry Pi 3
-./build_all.sh imx6     # i.MX6
-./build_all.sh stm32mp1 # STM32MP1
+# 1. Prepare SD card with boot image (see Lab 02)
+# 2. Insert SD card into BBB
+# 3. Hold the S2 (BOOT) button near the SD slot
+# 4. Apply 5V power while holding S2
+# 5. Release S2 after 2 seconds
+# 6. Watch serial console for U-Boot messages
 ```
 
-## 🎓 Learning Path
+### Step 4: Start Learning
 
-### Week 1: Foundations
-- Read all documentation in `docs/`
-- Complete Lab 01 (Boot Flow)
-- Complete beginner exercises
+Begin with the documentation, then proceed through labs sequentially:
 
-### Week 2: Bootloader Deep Dive
-- Complete Lab 02 (U-Boot)
-- Practice environment persistence
-- Add custom U-Boot command
-- Complete intermediate exercises (U-Boot section)
+```bash
+# Start here - understand the theory
+cat docs/embedded_linux_components.md
+cat docs/bootloader_stages.md
 
-### Week 3: Kernel and Device Tree
-- Complete Lab 03 (Kernel)
-- Complete Lab 04 (Device Tree)
-- Practice kernel configuration
+# Then begin Lab 01
+cat 01_boot_flow/README.md
+```
 
-### Week 4: Advanced Topics
-- Complete Lab 05 (Initramfs)
-- Complete Lab 06 (NFS Boot)
-- Complete Lab 07 (Recovery)
-- Complete advanced exercises
+---
 
-## 🔧 Supported Platforms
+## 🎓 Recommended Learning Path
 
-| Platform | Architecture | Status | Notes |
-|----------|-------------|--------|-------|
-| BeagleBone Black Rev. C | ARM Cortex-A8 (AM335x) | ✅ **Primary** | All tutorials based on this |
-| Raspberry Pi 3B/3B+ | ARM Cortex-A53 | ⚪ Reference | Some examples provided |
-| Raspberry Pi 4 | ARM Cortex-A72 | ⚪ Reference | 64-bit |
-| i.MX6 Sabre | ARM Cortex-A9 | ⚪ Reference | NXP i.MX6 |
-| STM32MP157 | ARM Cortex-A7 | ⚪ Reference | Dual Cortex-A7 + M4 |
+### Overview: Course Progression
 
-## 📖 Documentation Overview
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     EMBEDDED LINUX ESSENTIALS ROADMAP                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  WEEK 1-2: FOUNDATION                                                       │
+│  ══════════════════                                                         │
+│                                                                             │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐              │
+│  │  docs/   │───▶│  Lab 01  │───▶│  Lab 02  │───▶│ Beginner │              │
+│  │  Theory  │    │Boot Flow │    │  U-Boot  │    │Exercises │              │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘              │
+│                                                                             │
+│  WEEK 3-4: DEVELOPMENT                                                      │
+│  ════════════════════                                                       │
+│                                                                             │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌────────────┐            │
+│  │  Lab 03  │───▶│  Lab 04  │───▶│  Lab 05  │───▶│Intermediate│            │
+│  │  Kernel  │    │Dev. Tree │    │ Initramfs│    │  Exercises │            │
+│  └──────────┘    └──────────┘    └──────────┘    └────────────┘            │
+│                                                                             │
+│  WEEK 5-6: INTEGRATION                                                      │
+│  ════════════════════                                                       │
+│                                                                             │
+│  ┌──────────┐    ┌──────────┐    ┌──────────────────────────────┐          │
+│  │  Lab 06  │───▶│  Lab 07  │───▶│      Advanced Exercises      │          │
+│  │ NFS Boot │    │ Recovery │    │        (Pick a track)        │          │
+│  └──────────┘    └──────────┘    └──────────────────────────────┘          │
+│                                                                             │
+│  WEEK 7-10: MASTERY (Choose Your Path)                                      │
+│  ════════════════════════════════════                                       │
+│                                                                             │
+│  Track A: Kernel Developer          Track B: System Builder                │
+│  ──────────────────────────          ─────────────────────                  │
+│  01_kernel_module                    07_buildroot                           │
+│  02_debug_kernel_panic               08_yocto                               │
+│  05_preempt_rt                       09_custom_init                         │
+│        │                                   │                                │
+│        ▼                                   ▼                                │
+│  03_boot_optimization            10_network_boot                            │
+│        │                                   │                                │
+│        └──────────┬────────────────────────┘                                │
+│                   ▼                                                         │
+│           ┌──────────────┐                                                  │
+│           │04_ab_partition│                                                 │
+│           └──────┬───────┘                                                  │
+│                  ▼                                                          │
+│           ┌──────────────┐                                                  │
+│           │ 06_secure_boot│                                                 │
+│           └──────┬───────┘                                                  │
+│                  ▼                                                          │
+│     ┌────────────────────────┐                                              │
+│     │  CERTIFICATION PROJECT │                                              │
+│     │   (Capstone Project)   │                                              │
+│     └────────────────────────┘                                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-| Document | Description |
-|----------|-------------|
-| [Embedded Linux Components](docs/embedded_linux_components.md) | Overview of all system components |
-| [Bootloader Stages](docs/bootloader_stages.md) | ROM, SPL, U-Boot explained |
-| [Design Constraints](docs/bootloader_design_constraints.md) | Memory, storage, time, reliability |
-| [SPL Guide](docs/spl_guide.md) | **NEW:** Secondary Program Loader deep-dive |
-| [U-Boot Overview](docs/uboot_overview.md) | U-Boot internals and usage |
-| [SPL/U-Boot Relationship](docs/uboot_spl_relationship.md) | **NEW:** How SPL and U-Boot work together |
-| [Kernel Building](docs/kernel_building.md) | Complete kernel build guide |
-| [Device Tree](docs/device_tree.md) | DTS/DTB fundamentals |
-| [Initramfs](docs/initramfs.md) | Initial RAM filesystem |
-| [NFS Boot](docs/nfs_boot.md) | Network filesystem boot |
-| [Bootargs Reference](docs/bootargs_reference.md) | Kernel command line parameters |
-| [Recovery Guide](docs/recovery_guide.md) | Unbricking techniques |
+### Detailed Week-by-Week Guide
+
+#### Weeks 1-2: Foundation (15-20 hours)
+
+| Day | Activity | Resources |
+|-----|----------|-----------|
+| 1 | Read core documentation | [docs/embedded_linux_components.md](docs/embedded_linux_components.md) |
+| 2 | Understand boot stages | [docs/bootloader_stages.md](docs/bootloader_stages.md), [diagrams/](diagrams/) |
+| 3 | Lab 01: Boot Flow | [01_boot_flow/README.md](01_boot_flow/README.md) |
+| 4-5 | Lab 02: U-Boot | [02_uboot/README.md](02_uboot/README.md) |
+| 6 | U-Boot environment | [02_uboot/env_sdcard/](02_uboot/env_sdcard/) |
+| 7 | Custom U-Boot commands | [02_uboot/custom_cmd/](02_uboot/custom_cmd/) |
+| 8-10 | Beginner Exercises | [exercises/beginner.md](exercises/beginner.md) |
+
+#### Weeks 3-4: Development (15-20 hours)
+
+| Day | Activity | Resources |
+|-----|----------|-----------|
+| 1-2 | Lab 03: Kernel Building | [03_kernel/README.md](03_kernel/README.md) |
+| 3 | Lab 04: Device Tree | [04_device_tree/README.md](04_device_tree/README.md) |
+| 4-5 | Lab 05: Initramfs | [05_initramfs/README.md](05_initramfs/README.md) |
+| 6-10 | Intermediate Exercises | [exercises/intermediate.md](exercises/intermediate.md) |
+
+#### Weeks 5-6: Integration (10-15 hours)
+
+| Day | Activity | Resources |
+|-----|----------|-----------|
+| 1-3 | Lab 06: NFS Boot | [06_nfs_boot/README.md](06_nfs_boot/README.md) |
+| 4-6 | Lab 07: Recovery | [07_recovery/README.md](07_recovery/README.md) |
+| 7-10 | Begin Advanced Track | [exercises/advanced/README.md](exercises/advanced/README.md) |
+
+#### Weeks 7-10: Mastery (40+ hours)
+
+**Choose based on your career goals:**
+
+| Track | Exercises | Best For |
+|-------|-----------|----------|
+| **Kernel Developer** | 01, 02, 05, 03 → 04 → 06 | Driver development, real-time systems |
+| **System Builder** | 07, 08, 09, 10 → 04 → 06 | BSP development, product integration |
+| **Full Stack** | All exercises → Certification | Complete embedded Linux mastery |
+
+### Advanced Exercises Summary
+
+| # | Exercise | Description | Time | Difficulty |
+|---|----------|-------------|------|------------|
+| 01 | [Kernel Module](exercises/advanced/01_kernel_module.md) | Loadable modules with /proc interface | 4-6h | ⭐⭐⭐ |
+| 02 | [Debug Kernel Panic](exercises/advanced/02_debug_kernel_panic.md) | Crash analysis and debugging | 4-6h | ⭐⭐⭐ |
+| 03 | [Boot Optimization](exercises/advanced/03_boot_optimization.md) | Reduce boot time to <5 seconds | 6-8h | ⭐⭐⭐ |
+| 04 | [A/B Partition](exercises/advanced/04_ab_partition.md) | Robust update with rollback | 8-10h | ⭐⭐⭐⭐ |
+| 05 | [PREEMPT_RT](exercises/advanced/05_preempt_rt.md) | Real-time kernel patches | 6-8h | ⭐⭐⭐⭐ |
+| 06 | [Secure Boot](exercises/advanced/06_secure_boot.md) | Verified boot chain | 10-12h | ⭐⭐⭐⭐⭐ |
+| 07 | [Buildroot](exercises/advanced/07_buildroot.md) | Complete system build | 6-8h | ⭐⭐⭐ |
+| 08 | [Yocto](exercises/advanced/08_yocto.md) | Custom distribution | 10-12h | ⭐⭐⭐⭐ |
+| 09 | [Custom Init](exercises/advanced/09_custom_init.md) | Init without systemd | 6-8h | ⭐⭐⭐⭐ |
+| 10 | [Network Boot](exercises/advanced/10_network_boot.md) | PXE/TFTP/NFS infrastructure | 6-8h | ⭐⭐⭐ |
+
+### Certification Project
+
+After completing the advanced exercises, attempt the [Certification Project](exercises/advanced/certification_project.md):
+
+- Build a **production-ready embedded Linux system**
+- Boot time **under 10 seconds**
+- **A/B updates** with automatic rollback
+- **Custom kernel module** for hardware interaction
+- **Buildroot or Yocto** based rootfs
+- Optional: **Secure boot** implementation
+
+---
+
+## 📖 Documentation Reference
+
+### Core Concepts
+
+| Document | Description | Read When |
+|----------|-------------|-----------|
+| [Embedded Linux Components](docs/embedded_linux_components.md) | Overview of all system components | Start here |
+| [Bootloader Stages](docs/bootloader_stages.md) | ROM, SPL, U-Boot explained | Before Lab 01-02 |
+| [Design Constraints](docs/bootloader_design_constraints.md) | Memory, storage, time limits | Understanding trade-offs |
+| [SPL Guide](docs/spl_guide.md) | Secondary Program Loader deep-dive | Lab 02 |
+
+### Component References
+
+| Document | Description | Read When |
+|----------|-------------|-----------|
+| [U-Boot Overview](docs/uboot_overview.md) | U-Boot internals and usage | Lab 02 |
+| [SPL/U-Boot Relationship](docs/uboot_spl_relationship.md) | How SPL and U-Boot work together | Lab 02 |
+| [Kernel Building](docs/kernel_building.md) | Complete kernel build guide | Lab 03 |
+| [Device Tree](docs/device_tree.md) | DTS/DTB fundamentals | Lab 04 |
+| [Initramfs](docs/initramfs.md) | Initial RAM filesystem | Lab 05 |
+| [NFS Boot](docs/nfs_boot.md) | Network filesystem boot | Lab 06 |
+| [Bootargs Reference](docs/bootargs_reference.md) | Kernel command line parameters | All Labs |
+| [Recovery Guide](docs/recovery_guide.md) | Unbricking techniques | Lab 07 |
+
+---
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+### BeagleBone Black Specific Issues
 
-**No serial output:**
-- BeagleBone Black uses /dev/ttyACM0 (built-in USB-to-Serial)
-- Ensure USB programming cable is connected
-- Verify baud rate is 115200
-- Check user is in dialout group: `sudo usermod -a -G dialout $USER`
+#### No Serial Output
+```bash
+# Check if BBB is detected
+dmesg | grep -i acm
+# Expected: ttyACM0: USB ACM device
 
-**Kernel panic - no init found:**
-- Verify rootfs path in bootargs
-- Check filesystem type matches bootargs
-- Ensure init binary exists and is executable
+# Verify permissions
+ls -la /dev/ttyACM0
+# If permission denied:
+sudo usermod -a -G dialout $USER
+# Then logout and login again
 
-**BeagleBone won't boot from SD card:**
-- Hold the BOOT button (S2) while applying power
-- Release after 2-3 seconds
-- This forces boot from SD instead of eMMC
+# Test connection
+picocom -b 115200 /dev/ttyACM0
+```
 
-**U-Boot hangs:**
-- Use 5V/3A barrel jack power supply (USB may be insufficient)
-- Verify SD card is properly formatted (FAT32 for boot partition)
-- Try different SD card (some cards are incompatible)
+#### Won't Boot from SD Card
+```
+1. Power off the BBB completely
+2. Insert SD card
+3. Press and HOLD the S2 (BOOT) button (near SD slot)
+4. Apply 5V power via barrel jack
+5. Hold S2 for 2-3 seconds after power LED lights
+6. Release S2
+7. Watch serial console for U-Boot messages
+```
 
-See [07_recovery/README.md](07_recovery/README.md) for comprehensive debugging.
+#### U-Boot Hangs or Resets
+- **Power issue**: Use 5V/2A barrel jack, NOT USB power
+- **SD card issue**: Use Class 10 card, try different brands
+- **Corrupted image**: Re-flash MLO and u-boot.img
+
+#### Kernel Panic - No Init Found
+```bash
+# Common causes and fixes:
+
+# 1. Wrong rootfs path in bootargs
+# Check: root=/dev/mmcblk0p2 (for SD card partition 2)
+
+# 2. Filesystem type mismatch
+# Check: rootfstype=ext4 (must match actual fs)
+
+# 3. Init binary missing or not executable
+# On rootfs: ls -la /sbin/init
+# Must show: -rwxr-xr-x ... /sbin/init
+```
+
+#### Network Boot Failures
+```bash
+# Check TFTP server
+systemctl status tftpd-hpa
+
+# Check NFS exports
+showmount -e localhost
+
+# Verify BBB network
+# In U-Boot: dhcp; printenv ipaddr
+```
+
+### Quick Recovery Procedure
+
+If your BBB won't boot:
+
+1. **Get pre-built images** from [BeagleBoard.org](https://beagleboard.org/latest-images)
+2. **Flash to SD card**: `sudo dd if=image.img of=/dev/sdX bs=4M status=progress`
+3. **Boot from SD**: Hold S2, apply power
+4. **Flash to eMMC** (optional): `sudo /opt/scripts/tools/eMMC/bbb-eMMC-flasher-eewiki-ext4.sh`
+
+See [07_recovery/README.md](07_recovery/README.md) for detailed recovery procedures.
+
+---
+
+## 🔗 External Resources
+
+### Official Documentation
+- [BeagleBoard.org Wiki](https://elinux.org/Beagleboard:BeagleBoneBlack)
+- [AM335x Technical Reference Manual](https://www.ti.com/lit/ug/spruh73q/spruh73q.pdf)
+- [U-Boot Documentation](https://u-boot.readthedocs.io/)
+- [Linux Kernel Documentation](https://www.kernel.org/doc/html/latest/)
+- [Device Tree Specification](https://devicetree-specification.readthedocs.io/)
+
+### Build Systems
+- [Buildroot Manual](https://buildroot.org/downloads/manual/manual.html)
+- [Yocto Project Documentation](https://docs.yoctoproject.org/)
+- [OpenEmbedded Layers Index](https://layers.openembedded.org/)
+
+### Community
+- [BeagleBoard Forum](https://forum.beagleboard.org/)
+- [Linux Kernel Mailing List](https://lkml.org/)
+- [U-Boot Mailing List](https://lists.denx.de/pipermail/u-boot/)
+
+---
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please:
+
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/improvement`)
 3. Make your changes
-4. Submit a pull request
+4. Test on real BeagleBone Black hardware if possible
+5. Submit a pull request
+
+### Contribution Ideas
+- Fix errors found during hardware testing
+- Add more detailed explanations
+- Create additional exercises
+- Improve diagrams and visualizations
+
+---
 
 ## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+---
+
 ## 🙏 Acknowledgments
 
-- The U-Boot project and maintainers
-- The Linux kernel community
-- Raspberry Pi Foundation
-- BeagleBoard.org Foundation
-- The Embedded Linux community
-
-## 📧 Contact
-
-For questions, issues, or feedback, please open a GitHub issue.
+- **Texas Instruments** - AM335x SoC and documentation
+- **BeagleBoard.org Foundation** - BeagleBone Black platform
+- **U-Boot Project** - Bootloader framework
+- **Linux Kernel Community** - The kernel that makes it all work
+- **Buildroot & Yocto Projects** - Build system frameworks
 
 ---
+
+<div align="center">
 
 **Happy Learning! 🚀**
 
 *"The best way to learn Embedded Linux is to build it from scratch."*
+
+---
+
+**Total Course Content:**
+
+7 Core Labs | 10+ Advanced Exercises | 1 Certification Project
+
+100+ Scripts | Comprehensive Documentation | Real Hardware Focus
+
+**Target Platform:** BeagleBone Black Rev C (AM335x Cortex-A8)
+
+</div>
