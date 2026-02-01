@@ -1,0 +1,155 @@
+/*
+ * FIT Image Source for BeagleBone Black
+ * 
+ * Template for creating signed FIT images
+ * 
+ * Usage:
+ *   1. Replace paths with actual kernel and DTB locations
+ *   2. Generate keys with generate_keys.sh
+ *   3. Build and sign: mkimage -f image.its -k ./keys -r image.fit
+ *
+ * Author: Embedded Linux Labs
+ * License: MIT
+ */
+
+/dts-v1/;
+
+/ {
+    description = "Signed kernel image for BeagleBone Black";
+    #address-cells = <1>;
+
+    /*
+     * Images Section
+     * Contains all bootable components (kernel, DTB, ramdisk)
+     */
+    images {
+        /*
+         * Linux Kernel Image
+         * - zImage compressed kernel
+         * - Load and entry addresses for AM335x
+         */
+        kernel-1 {
+            description = "Linux kernel for AM335x";
+            data = /incbin/("zImage");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            compression = "none";
+            load = <0x82000000>;
+            entry = <0x82000000>;
+            
+            /*
+             * Hash node - Integrity check
+             * SHA-256 provides strong integrity verification
+             */
+            hash-1 {
+                algo = "sha256";
+            };
+            
+            /*
+             * Signature node - Authentication
+             * RSA-2048 + SHA-256 for cryptographic verification
+             * key-name-hint must match key file name (without extension)
+             */
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev_key";
+            };
+        };
+
+        /*
+         * Device Tree Blob
+         * - Platform-specific hardware description
+         */
+        fdt-1 {
+            description = "BeagleBone Black Device Tree";
+            data = /incbin/("am335x-boneblack.dtb");
+            type = "flat_dt";
+            arch = "arm";
+            compression = "none";
+            load = <0x88000000>;
+            
+            hash-1 {
+                algo = "sha256";
+            };
+            
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev_key";
+            };
+        };
+
+        /*
+         * Optional: Initial Ramdisk
+         * Uncomment if using initramfs
+         */
+        /*
+        ramdisk-1 {
+            description = "Initial Ramdisk";
+            data = /incbin/("initramfs.cpio.gz");
+            type = "ramdisk";
+            arch = "arm";
+            os = "linux";
+            compression = "gzip";
+            
+            hash-1 {
+                algo = "sha256";
+            };
+            
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev_key";
+            };
+        };
+        */
+    };
+
+    /*
+     * Configurations Section
+     * Defines boot configurations combining images
+     */
+    configurations {
+        default = "conf-1";
+
+        /*
+         * Standard Boot Configuration
+         * Kernel + DTB, signed together
+         */
+        conf-1 {
+            description = "BeagleBone Black - Standard Boot";
+            kernel = "kernel-1";
+            fdt = "fdt-1";
+            /* ramdisk = "ramdisk-1"; */
+            
+            /*
+             * Configuration Signature
+             * Signs the entire configuration including all referenced images
+             * This ensures all components are verified together
+             */
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev_key";
+                sign-images = "kernel", "fdt";
+                /* sign-images = "kernel", "fdt", "ramdisk"; */
+            };
+        };
+
+        /*
+         * Optional: Recovery Configuration
+         * Different DTB for recovery mode
+         */
+        /*
+        conf-recovery {
+            description = "BeagleBone Black - Recovery Mode";
+            kernel = "kernel-1";
+            fdt = "fdt-recovery";
+            
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev_key";
+                sign-images = "kernel", "fdt";
+            };
+        };
+        */
+    };
+};

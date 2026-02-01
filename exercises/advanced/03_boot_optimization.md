@@ -7,117 +7,184 @@
 
 ## Objective
 
-Reduce boot time from power-on to application start on BeagleBone Black.
+Reduce boot time from power-on to application start on BeagleBone Black. Master measurement techniques, identify bottlenecks, and apply optimizations at every boot stage.
 
 ## Prerequisites
 
 - Working BeagleBone Black with custom kernel
 - U-Boot source and ability to rebuild
 - Serial console for timing measurements
-- Stopwatch or timestamp analysis tools
+- grabserial tool (`pip3 install grabserial`)
 
 ## Difficulty: ⭐⭐⭐ Advanced
 
 ---
 
-## Tasks
-
-1. Measure baseline boot time
-2. Identify bottlenecks at each stage
-3. Apply optimizations to U-Boot, kernel, and userspace
-4. Measure and document improvement
-
----
-
-## BeagleBone Black Boot Stages
+## 📁 Directory Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 BBB BOOT TIME BREAKDOWN                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Power On                                                   │
-│     │                                                       │
-│     ▼ (~0.5s)                                              │
-│  ROM Bootloader (fixed, cannot optimize)                    │
-│     │                                                       │
-│     ▼ (~1-2s)                                              │
-│  MLO/SPL ──────────► Opportunity: Minimal SPL              │
-│     │                                                       │
-│     ▼ (~2-4s)                                              │
-│  U-Boot ───────────► Opportunity: bootdelay, silent mode   │
-│     │                                                       │
-│     ▼ (~3-8s)                                              │
-│  Kernel ───────────► Opportunity: config, initcall order   │
-│     │                                                       │
-│     ▼ (~5-20s)                                             │
-│  Userspace ────────► Opportunity: init system, services    │
-│     │                                                       │
-│     ▼                                                       │
-│  Application Ready                                          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+03_boot_optimization/
+├── scripts/
+│   ├── measure_baseline.sh    # Boot time measurement with grabserial
+│   ├── analyze_boot.sh        # Boot log analysis and bottleneck ID
+│   ├── generate_bootchart.sh  # Create visual boot timeline
+│   └── apply_optimizations.sh # Apply optimizations to target
+└── configs/
+    ├── kernel_fast.config     # Kernel fragment for fast boot
+    ├── uboot_fast.config      # U-Boot config for fast boot
+    ├── boot_fast.txt          # Minimal U-Boot boot script
+    ├── boot_falcon.txt        # Falcon Mode setup script
+    └── grabserial.conf        # grabserial configurations
 ```
 
 ---
 
-## Step-by-Step Guide
+## Part 1: Boot Time Theory
 
-### Step 1: Measure Baseline Boot Time
+### Understanding Boot Stages
 
-**Enable kernel timestamps:**
-
-```bash
-# Add to U-Boot bootargs
-setenv bootargs 'console=ttyO0,115200n8 root=/dev/mmcblk0p2 rootwait printk.time=1'
-saveenv
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    BOOT TIME BREAKDOWN                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ╔═══════════════╗                                             │
+│  ║   POWER ON    ║ t=0                                         │
+│  ╚═══════╤═══════╝                                             │
+│          │                                                      │
+│          ▼ (~0.5s)                                             │
+│  ┌───────────────────────────────────────────────────┐         │
+│  │ ROM BOOTLOADER (AM335x internal ROM)              │         │
+│  │ • Initializes SRAM                                │         │
+│  │ • Searches for MLO on MMC/SD/UART/USB            │         │
+│  │ • FIXED - Cannot optimize                         │         │
+│  └────────────────────┬──────────────────────────────┘         │
+│                       │                                         │
+│                       ▼ (~1-2s)                                │
+│  ┌───────────────────────────────────────────────────┐         │
+│  │ MLO/SPL (Secondary Program Loader)                │         │
+│  │ • Initializes DRAM controller                     │         │
+│  │ • Sets up clocks and PLLs                        │         │
+│  │ • Loads U-Boot from storage                       │         │
+│  │ ★ Optimization: Falcon Mode (skip U-Boot)        │         │
+│  └────────────────────┬──────────────────────────────┘         │
+│                       │                                         │
+│                       ▼ (~2-4s)                                │
+│  ┌───────────────────────────────────────────────────┐         │
+│  │ U-BOOT (Main bootloader)                          │         │
+│  │ • Autoboot delay (default 3s!)                   │         │
+│  │ • Device initialization                           │         │
+│  │ • Loads kernel + DTB + ramdisk                   │         │
+│  │ ★ Optimization: bootdelay=0, silent, scripting   │         │
+│  └────────────────────┬──────────────────────────────┘         │
+│                       │                                         │
+│                       ▼ (~3-8s)                                │
+│  ┌───────────────────────────────────────────────────┐         │
+│  │ LINUX KERNEL                                      │         │
+│  │ • Hardware initialization (initcalls)            │         │
+│  │ • Device driver probing                          │         │
+│  │ • Filesystem mounting                            │         │
+│  │ ★ Optimization: quiet, driver pruning, modules   │         │
+│  └────────────────────┬──────────────────────────────┘         │
+│                       │                                         │
+│                       ▼ (~5-20s)                               │
+│  ┌───────────────────────────────────────────────────┐         │
+│  │ USERSPACE (init system)                           │         │
+│  │ • systemd (slow) vs BusyBox init (fast)          │         │
+│  │ • Service startup                                 │         │
+│  │ • Application launch                              │         │
+│  │ ★ Optimization: init choice, service pruning     │         │
+│  └────────────────────┬──────────────────────────────┘         │
+│                       │                                         │
+│                       ▼                                         │
+│  ╔═══════════════════════════════════════════════════╗         │
+│  ║            APPLICATION READY                       ║         │
+│  ╚═══════════════════════════════════════════════════╝         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Capture boot log:**
+### Boot Time Budget Example
 
-```bash
-# On host - capture with timestamps
-script -t 2>timing.txt boot.log
-screen /dev/ttyACM0 115200
-# Power cycle BBB, wait for login prompt
-# Exit screen (Ctrl-A, \)
-exit
+| Configuration | ROM | SPL | U-Boot | Kernel | Userspace | **Total** |
+|--------------|-----|-----|--------|--------|-----------|-----------|
+| **Unoptimized** | 0.5s | 1.5s | 4.0s | 5.0s | 15.0s | **26.0s** |
+| **Optimized systemd** | 0.5s | 1.5s | 0.5s | 2.5s | 7.0s | **12.0s** |
+| **BusyBox init** | 0.5s | 1.5s | 0.5s | 2.5s | 2.0s | **7.0s** |
+| **Falcon Mode** | 0.5s | 2.0s | 0.0s | 2.5s | 2.0s | **7.0s** |
+| **Extreme** | 0.5s | 1.0s | 0.0s | 1.5s | 0.5s | **3.5s** |
 
-# Analyze timing
-scriptreplay timing.txt boot.log
-```
+---
 
-**Measure with grabserial (recommended):**
+## Part 2: Measuring Boot Time
+
+### Tool: grabserial
+
+📁 **Configuration:** [configs/grabserial.conf](03_boot_optimization/configs/grabserial.conf)
 
 ```bash
 # Install grabserial
 pip3 install grabserial
 
-# Capture with hardware timestamps
+# Basic measurement
 grabserial -d /dev/ttyACM0 -b 115200 -t -m "U-Boot SPL" -q "login:"
 ```
 
-### Step 2: Analyze Baseline
+### Measurement Script
 
-**Typical BBB unoptimized boot:**
+📁 **Script:** [scripts/measure_baseline.sh](03_boot_optimization/scripts/measure_baseline.sh)
 
-| Stage | Time | Cumulative |
-|-------|------|------------|
-| ROM → MLO | ~0.5s | 0.5s |
-| MLO → U-Boot | ~1.5s | 2.0s |
-| U-Boot delay | 3.0s | 5.0s |
-| U-Boot → Kernel | ~1.0s | 6.0s |
-| Kernel init | ~5.0s | 11.0s |
-| Userspace (systemd) | ~15.0s | 26.0s |
-| **Total** | | **~26s** |
+```bash
+# Make executable
+chmod +x 03_boot_optimization/scripts/*.sh
+
+# Measure baseline boot time
+./03_boot_optimization/scripts/measure_baseline.sh /dev/ttyACM0
+
+# Output goes to ./measurements/boot_baseline_YYYYMMDD_HHMMSS.log
+```
+
+### Analysis Script
+
+📁 **Script:** [scripts/analyze_boot.sh](03_boot_optimization/scripts/analyze_boot.sh)
+
+```bash
+# Analyze captured boot log
+./03_boot_optimization/scripts/analyze_boot.sh measurements/boot_baseline_*.log
+
+# Generates report with:
+# - Stage timeline
+# - Bottleneck identification
+# - Top slowest initcalls
+# - Optimization recommendations
+```
+
+### Enable Kernel Timestamps
+
+```bash
+# In U-Boot
+setenv bootargs 'console=ttyO0,115200n8 root=/dev/mmcblk0p2 rootwait printk.time=1'
+saveenv
+```
+
+### Enable Initcall Debug
+
+```bash
+# For detailed kernel analysis
+setenv bootargs 'console=ttyO0,115200n8 root=/dev/mmcblk0p2 rootwait printk.time=1 initcall_debug'
+saveenv
+```
 
 ---
 
-## Optimization Techniques
+## Part 3: U-Boot Optimizations
 
-### U-Boot Optimizations
+📁 **Config:** [configs/uboot_fast.config](03_boot_optimization/configs/uboot_fast.config)
+📁 **Boot Script:** [configs/boot_fast.txt](03_boot_optimization/configs/boot_fast.txt)
 
-**1. Eliminate boot delay:**
+### Quick Wins
+
+**1. Eliminate boot delay (saves 3s):**
 
 ```bash
 # In U-Boot console
@@ -125,177 +192,181 @@ setenv bootdelay 0
 saveenv
 ```
 
-**2. Silent boot (optional):**
+**2. Silent boot:**
 
 ```bash
-# Disable console output
 setenv silent 1
 saveenv
 ```
 
-**3. Optimize U-Boot config:**
+**3. Minimal boot script:**
 
 ```bash
-# In am335x_evm_defconfig or menuconfig
-CONFIG_BOOTDELAY=0
-# CONFIG_CMD_NET is not set        # If not using network boot
-# CONFIG_CMD_USB is not set        # If not using USB boot
-# CONFIG_CMD_FPGA is not set       # Not needed on BBB
-CONFIG_SILENT_CONSOLE=y            # Optional silent mode
+# Compile optimized boot script
+cd 03_boot_optimization/configs
+mkimage -C none -A arm -T script -d boot_fast.txt boot.scr
+scp boot.scr debian@192.168.7.2:/boot/
 ```
 
-**4. Use Falcon Mode (skip U-Boot):**
+### Falcon Mode (Advanced)
+
+📁 **Setup Script:** [configs/boot_falcon.txt](03_boot_optimization/configs/boot_falcon.txt)
+
+Falcon Mode allows SPL to boot Linux directly, completely bypassing U-Boot proper. This saves 2-3 seconds but removes the U-Boot console.
 
 ```bash
-# SPL boots kernel directly - advanced!
-# Saves ~2 seconds but loses U-Boot flexibility
-CONFIG_SPL_OS_BOOT=y
+# In U-Boot console (one-time setup):
+
+# 1. Set minimal bootargs
+setenv bootargs 'console=ttyO0,115200n8 root=/dev/mmcblk0p2 rootwait quiet'
+
+# 2. Load kernel and DTB
+mmc dev 0
+load mmc 0:1 0x82000000 zImage
+load mmc 0:1 0x88000000 am335x-boneblack.dtb
+
+# 3. Export to SPL
+spl export fdt 0x82000000 - 0x88000000
+
+# 4. Save
+saveenv
 ```
 
-### Kernel Optimizations
+Recovery: Hold boot button during power-on to force U-Boot.
 
-**1. Kernel command line:**
+---
+
+## Part 4: Kernel Optimizations
+
+📁 **Config Fragment:** [configs/kernel_fast.config](03_boot_optimization/configs/kernel_fast.config)
+
+### Bootargs Optimization
 
 ```bash
 # Add to bootargs
 quiet loglevel=0
 ```
 
-**2. Kernel config optimizations:**
+### Apply Config Fragment
 
 ```bash
-make menuconfig
+cd ~/bbb/linux
 
-# Disable debug features
-# CONFIG_DEBUG_INFO is not set
-# CONFIG_DEBUG_KERNEL is not set
-# CONFIG_PRINTK_TIME is not set    # After measurement!
+# Start with default
+make am335x_evm_defconfig
 
-# Optimize for size
-CONFIG_CC_OPTIMIZE_FOR_SIZE=y
+# Merge fast boot options
+scripts/kconfig/merge_config.sh .config \
+    /path/to/03_boot_optimization/configs/kernel_fast.config
 
-# Disable unused features
-# CONFIG_USB_SUPPORT is not set    # If not using USB
-# CONFIG_SOUND is not set          # If not using audio
-# CONFIG_INPUT_EVDEV is not set    # If not using input
-
-# Enable deferred initcalls (6.x+)
-CONFIG_DEFERRED_INITCALLS=y
+# Build
+make -j$(nproc) ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
 ```
 
-**3. Analyze initcall times:**
+### Key Kernel Options
+
+| Option | Effect | Savings |
+|--------|--------|---------|
+| `CONFIG_CC_OPTIMIZE_FOR_SIZE=y` | Smaller kernel | ~0.5s load |
+| `CONFIG_KERNEL_LZO=y` | Fast decompression | ~0.3s |
+| `CONFIG_PREEMPT_NONE=y` | Less scheduling overhead | ~0.2s |
+| `CONFIG_HZ_100=y` | Reduced timer overhead | ~0.1s |
+| Disable unused drivers | Less initcalls | 1-3s |
+
+### Initcall Analysis
+
+📁 **Script:** [scripts/generate_bootchart.sh](03_boot_optimization/scripts/generate_bootchart.sh)
 
 ```bash
-# Add to bootargs
-initcall_debug
+# On target (with initcall_debug enabled)
+dmesg > /tmp/dmesg.log
+scp debian@192.168.7.2:/tmp/dmesg.log .
 
-# After boot
-dmesg | grep "initcall" | sort -k2 -t'=' -n | tail -20
+# Generate bootchart
+./03_boot_optimization/scripts/generate_bootchart.sh dmesg.log
+
+# View results
+cat bootchart_summary.txt
 ```
 
-**4. Use kernel compression wisely:**
+---
+
+## Part 5: Userspace Optimizations
+
+📁 **Script:** [scripts/apply_optimizations.sh](03_boot_optimization/scripts/apply_optimizations.sh)
+
+### Analyze Current State
 
 ```bash
-# LZO is faster to decompress than GZIP
-CONFIG_KERNEL_LZO=y
-# Or no compression if storage is fast
-CONFIG_KERNEL_UNCOMPRESSED=y
+# Connect and analyze
+./03_boot_optimization/scripts/apply_optimizations.sh debian@192.168.7.2 --analyze
 ```
 
-### Userspace Optimizations
-
-**1. Analyze systemd (if used):**
+### Apply Optimizations
 
 ```bash
+# Apply all optimizations
+./03_boot_optimization/scripts/apply_optimizations.sh debian@192.168.7.2
+```
+
+### Manual systemd Optimization
+
+```bash
+# On BBB
 systemd-analyze
-systemd-analyze blame
+systemd-analyze blame | head -20
 systemd-analyze critical-chain
+
+# Disable slow services
+sudo systemctl disable bluetooth ModemManager avahi-daemon
+sudo systemctl mask systemd-networkd-wait-online
 ```
 
-**2. Disable unnecessary services:**
+### BusyBox Init Alternative
+
+For fastest userspace boot, replace systemd with BusyBox init:
 
 ```bash
-systemctl disable bluetooth
-systemctl disable ModemManager
-systemctl disable cups
-systemctl disable avahi-daemon
-# Keep only essential services
+# In kernel bootargs
+init=/linuxrc
+
+# Or custom init script
+init=/sbin/myinit
 ```
 
-**3. Use simpler init system:**
+See [Exercise 09: Custom Init](09_custom_init.md) for details.
+
+---
+
+## Part 6: Advanced Techniques
+
+### Read-Only Root Filesystem
 
 ```bash
-# BusyBox init is much faster than systemd
-# See Exercise 09: Custom Init System
-```
-
-**4. Parallel service startup:**
-
-```bash
-# In /etc/systemd/system.conf
-DefaultDependencies=no
-```
-
-**5. Filesystem optimization:**
-
-```bash
-# Use faster filesystem
-# ext4 with journal disabled for read-only rootfs
-tune2fs -O ^has_journal /dev/mmcblk0p2
-
-# Or use squashfs for read-only rootfs
+# Create squashfs (compressed, fast mount)
 mksquashfs rootfs/ rootfs.sqsh -comp lzo
+
+# Use overlay for writable areas
+mount -t overlay overlay -o lowerdir=/,upperdir=/tmp/upper,workdir=/tmp/work /merged
 ```
 
----
-
-## Advanced: Create Boot Graph
+### Pre-linked Applications
 
 ```bash
-# Kernel boot graph
-# Add to bootargs: initcall_debug
-
-# After boot, on target:
-dmesg > /tmp/boot.log
-
-# Copy to host
-scp debian@192.168.7.2:/tmp/boot.log .
-
-# Generate graph (from kernel source)
-./scripts/bootgraph.pl boot.log > boot.svg
-```
-
----
-
-## BBB-Specific Optimizations
-
-### Optimize Device Tree Loading
-
-```bash
-# Load DTB from known location, skip auto-detect
-setenv fdtfile am335x-boneblack.dtb
-# Don't search for overlays on boot
-setenv uboot_overlay_options ""
-```
-
-### Skip eMMC if Booting from SD
-
-```bash
-# In U-Boot, force SD boot
-setenv mmcdev 0
-setenv mmcpart 1
-```
-
-### Pre-link Critical Applications
-
-```bash
-# On build host
+# Pre-resolve dynamic library symbols
 prelink -a -m -R -f /path/to/rootfs
 ```
 
+### Application Hibernation (Fastest)
+
+```bash
+# Save application state to disk
+# Boot directly into running application
+# Requires custom kernel support
+CONFIG_HIBERNATION=y
 ---
 
-## Results Tracking
+## Results Tracking Table
 
 | Stage | Baseline | Optimized | Savings |
 |-------|----------|-----------|---------|

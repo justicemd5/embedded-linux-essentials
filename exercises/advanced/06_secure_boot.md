@@ -5,6 +5,55 @@
 
 **Target Platform:** BeagleBone Black Rev C (AM335x)
 
+---
+
+## Directory Structure
+
+```
+06_secure_boot/
+├── scripts/
+│   ├── generate_keys.sh       # RSA key pair generation
+│   ├── create_fit_image.sh    # FIT image creation
+│   ├── sign_image.sh          # Image signing with mkimage
+│   ├── verify_image.sh        # Signature verification
+│   ├── secure_boot_test.sh    # End-to-end testing
+│   └── hab_info.sh            # HAB/eFuse information (reference)
+├── configs/
+│   ├── image.its              # FIT image source template
+│   ├── image_with_ramdisk.its # FIT with initramfs
+│   ├── image_multi.its        # Multi-configuration FIT
+│   └── uboot_secure.config    # U-Boot config fragment
+└── docs/
+    ├── key_management.md      # Key management best practices
+    └── troubleshooting.md     # Common issues and solutions
+```
+
+## Quick Start
+
+```bash
+cd /home/mp/embedded-linux-essentials/exercises/advanced/06_secure_boot
+
+# 1. Generate signing keys
+chmod +x scripts/*.sh
+./scripts/generate_keys.sh
+
+# 2. Create FIT image (adjust paths as needed)
+./scripts/create_fit_image.sh \
+    ~/bbb/linux/arch/arm/boot/zImage \
+    ~/bbb/linux/arch/arm/boot/dts/am335x-boneblack.dtb
+
+# 3. Sign the image
+./scripts/sign_image.sh image.fit ./keys
+
+# 4. Verify the signature
+./scripts/verify_image.sh image.fit.signed
+
+# 5. Run full test suite
+./scripts/secure_boot_test.sh full
+```
+
+---
+
 ## Objective
 
 Implement a verified boot chain with signed images to ensure only authorized software runs.

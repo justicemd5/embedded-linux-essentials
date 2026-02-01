@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+# S20syslog - Start system logger
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+SYSLOGD="/sbin/syslogd"
+KLOGD="/sbin/klogd"
+LOGFILE="/var/log/messages"
+
+start() {
+    echo "Starting system logger..."
+    
+    # Create log directory
+    mkdir -p /var/log
+    
+    # Start syslogd
+    if [ -x "$SYSLOGD" ]; then
+        $SYSLOGD -O "$LOGFILE" -S
+        echo "  syslogd started"
+    fi
+    
+    # Start klogd (kernel logger)
+    if [ -x "$KLOGD" ]; then
+        $KLOGD
+        echo "  klogd started"
+    fi
+}
+
+stop() {
+    echo "Stopping system logger..."
+    
+    killall klogd 2>/dev/null
+    killall syslogd 2>/dev/null
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        sleep 1
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

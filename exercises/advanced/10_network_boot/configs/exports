@@ -1,0 +1,73 @@
+# NFS Exports Configuration for BeagleBone Black
+#
+# This file defines the NFS exports for network boot
+#
+# Installation:
+#   sudo cp -a exports /etc/exports
+#   sudo exportfs -ra
+#
+# Format:
+#   <export> <host>(options)
+#
+# Author: Embedded Linux Labs
+
+# ==========================================================================
+# MAIN ROOTFS EXPORT
+# ==========================================================================
+
+# Development rootfs - full read/write access
+# Options explained:
+#   rw              - Read/write access
+#   sync            - Synchronous writes (safer, slower)
+#   no_subtree_check - Don't check if file is in subtree (faster)
+#   no_root_squash  - Allow root access (required for init)
+#   insecure        - Allow connections from ports > 1024
+
+/export/bbb-root 192.168.10.0/24(rw,sync,no_subtree_check,no_root_squash)
+
+# ==========================================================================
+# ADDITIONAL ROOTFS EXPORTS
+# ==========================================================================
+
+# Multiple rootfs for different purposes
+# Uncomment and modify as needed:
+
+# Production rootfs (read-only)
+# /export/bbb-prod 192.168.10.0/24(ro,sync,no_subtree_check,no_root_squash)
+
+# Testing rootfs
+# /export/bbb-test 192.168.10.0/24(rw,sync,no_subtree_check,no_root_squash)
+
+# Per-board rootfs (for specific BeagleBones)
+# /export/bbb-01 192.168.10.50(rw,sync,no_subtree_check,no_root_squash)
+# /export/bbb-02 192.168.10.51(rw,sync,no_subtree_check,no_root_squash)
+
+# ==========================================================================
+# SHARED DIRECTORIES
+# ==========================================================================
+
+# Shared home directories (optional)
+# /export/home 192.168.10.0/24(rw,sync,no_subtree_check,no_root_squash)
+
+# Shared data directory (optional)
+# /export/data 192.168.10.0/24(rw,sync,no_subtree_check)
+
+# ==========================================================================
+# SECURITY NOTES
+# ==========================================================================
+
+# WARNING: no_root_squash is required for the root filesystem
+# but allows remote root access. Only use on trusted networks!
+
+# For production environments, consider:
+#   - Using a dedicated VLAN
+#   - Restricting to specific IP addresses
+#   - Using NFSv4 with Kerberos authentication
+#   - Implementing read-only rootfs with tmpfs overlays
+
+# Example with specific host only:
+# /export/bbb-root 192.168.10.50(rw,sync,no_subtree_check,no_root_squash)
+
+# Example with read-only root + tmpfs:
+# Use kernel bootargs: root=/dev/nfs nfsroot=...,ro
+# Then use overlayfs in init to make / appear writable

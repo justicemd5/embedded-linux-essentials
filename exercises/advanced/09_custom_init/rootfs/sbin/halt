@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# halt - Shutdown and halt the system
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+echo ""
+echo "System is halting..."
+echo ""
+
+# Save timestamp
+date > /etc/timestamp 2>/dev/null
+
+# Sync filesystems
+sync
+
+# Tell init to halt
+kill -TERM 1
+
+# Wait for init to handle shutdown
+sleep 5
+
+# If still running, force halt
+echo "Forcing halt..."
+sync
+/sbin/poweroff -f 2>/dev/null || reboot -f

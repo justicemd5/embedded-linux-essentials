@@ -1,0 +1,118 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          boot-success
+# Required-Start:    $local_fs $network
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Mark boot as successful for A/B system
+# Description:       Resets U-Boot bootcount after system reaches
+#                    a stable state, preventing automatic rollback.
+### END INIT INFO
+
+# Configuration
+STABILITY_DELAY=10          # Seconds to wait before marking success
+NETWORK_REQUIRED=true       # Require network before marking success
+FOTA_STATE="/data/fota/state.json"
+LOG_TAG="boot-success"
+
+log_msg() {
+    logger -t "$LOG_TAG" "$1"
+    echo "$1"
+}
+
+check_network() {
+    # Check if any network interface is up (except lo)
+    if ip link show | grep -v "lo:" | grep -q "state UP"; then
+        return 0
+    fi
+    
+    # Alternative: check for default route
+    if ip route | grep -q "^default"; then
+        return 0
+    fi
+    
+    # Alternative: check for marker file
+    if [ -f /var/run/network-up ]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+reset_bootcount() {
+    if command -v fw_setenv > /dev/null 2>&1; then
+        fw_setenv bootcount 0
+        log_msg "Reset bootcount to 0"
+        return 0
+    else
+        log_msg "ERROR: fw_setenv not found, cannot reset bootcount"
+        return 1
+    fi
+}
+
+confirm_update() {
+    # If there's a pending FOTA update, confirm it
+    if [ -f "$FOTA_STATE" ]; then
+        log_msg "Confirming FOTA update..."
+        if command -v fota_client > /dev/null 2>&1; then
+            fota_client --success
+        fi
+        rm -f "$FOTA_STATE"
+    fi
+}
+
+get_status() {
+    if command -v fw_printenv > /dev/null 2>&1; then
+        SLOT=$(fw_printenv -n slot 2>/dev/null || echo "unknown")
+        BOOTCOUNT=$(fw_printenv -n bootcount 2>/dev/null || echo "unknown")
+        BOOTLIMIT=$(fw_printenv -n bootlimit 2>/dev/null || echo "unknown")
+        echo "Current slot: $SLOT"
+        echo "Boot count: $BOOTCOUNT / $BOOTLIMIT"
+    else
+        echo "fw_printenv not available"
+    fi
+}
+
+case "$1" in
+    start)
+        log_msg "Waiting ${STABILITY_DELAY}s for system stability..."
+        sleep "$STABILITY_DELAY"
+        
+        # Check network if required
+        if [ "$NETWORK_REQUIRED" = "true" ]; then
+            if check_network; then
+                log_msg "Network is up"
+            else
+                log_msg "WARNING: Network not ready, marking success anyway"
+            fi
+        fi
+        
+        # Reset bootcount
+        if reset_bootcount; then
+            log_msg "Boot marked as successful"
+            confirm_update
+        else
+            log_msg "WARNING: Failed to mark boot as successful"
+        fi
+        ;;
+    
+    stop)
+        # Nothing to do on stop
+        ;;
+    
+    status)
+        get_status
+        ;;
+    
+    restart|force-reload)
+        $0 start
+        ;;
+    
+    *)
+        echo "Usage: $0 {start|stop|status|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

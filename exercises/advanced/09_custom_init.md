@@ -5,6 +5,57 @@
 
 **Target Platform:** BeagleBone Black Rev C (AM335x)
 
+## Directory Structure
+
+```
+09_custom_init/
+├── build_init.sh           # Build script for cross-compilation
+├── install_init.sh         # Install init to rootfs
+├── test_init.sh            # Test init in isolated environment
+├── src/
+│   ├── init.c              # Minimal init implementation (~450 lines)
+│   ├── init_advanced.c     # Advanced init with service management
+│   └── Makefile            # Cross-compilation makefile
+├── rootfs/
+│   ├── etc/
+│   │   ├── init.conf       # Init configuration file
+│   │   └── init.d/
+│   │       ├── rcS         # Main startup script
+│   │       ├── S10network  # Network initialization
+│   │       ├── S20syslog   # System logger
+│   │       └── S50dropbear # SSH server
+│   └── sbin/
+│       ├── halt            # Halt command
+│       └── reboot          # Reboot command
+└── docs/
+    ├── init_theory.md      # Comprehensive PID 1 theory
+    └── troubleshooting.md  # Common problems and solutions
+```
+
+## Quick Start
+
+```bash
+# Navigate to exercise directory
+cd 09_custom_init
+
+# Build minimal init for ARM
+./build_init.sh minimal
+
+# Or build advanced version with service management
+./build_init.sh advanced
+
+# Build native version for testing on host
+./build_init.sh minimal native
+
+# Install to mounted rootfs
+sudo mount /dev/sdb2 /mnt
+sudo ./install_init.sh /mnt
+sudo umount /mnt
+
+# Test in isolated environment (limited)
+sudo ./test_init.sh
+```
+
 ## Objective
 
 Build a minimal init system from scratch without systemd or BusyBox init to understand the Linux boot process.

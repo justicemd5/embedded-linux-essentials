@@ -1,0 +1,76 @@
+# U-Boot A/B Environment Variables
+# Load these via serial console or include in default environment
+#
+# Usage at U-Boot prompt:
+#   => source scripts/ab_environment.txt
+# Or copy/paste each setenv command
+
+# Active slot (a or b)
+setenv slot a
+
+# Boot attempt limit before switching slots
+setenv bootlimit 3
+
+# Current boot attempt counter
+setenv bootcount 0
+
+# A/B slot selection logic
+# Checks if boot counter exceeded limit, switches slot if so
+setenv ab_select '
+    if test ${bootcount} -ge ${bootlimit}; then
+        echo "=== Slot ${slot} failed ${bootlimit} times, switching ===";
+        if test ${slot} = a; then
+            setenv slot b;
+        else
+            setenv slot a;
+        fi;
+        setenv bootcount 0;
+        saveenv;
+        echo "=== Now booting from slot ${slot} ===";
+    fi;
+    setexpr bootcount ${bootcount} + 1;
+    saveenv;
+'
+
+# Set partition numbers based on active slot
+setenv set_slot_parts '
+    if test ${slot} = a; then
+        setenv bootpart 1;
+        setenv rootpart 2;
+        echo "Booting from Slot A (p1/p2)";
+    else
+        setenv bootpart 3;
+        setenv rootpart 5;
+        echo "Booting from Slot B (p3/p5)";
+    fi;
+'
+
+# Main boot command for selected slot
+setenv boot_slot '
+    fatload mmc 0:${bootpart} ${loadaddr} zImage;
+    fatload mmc 0:${bootpart} ${fdtaddr} am335x-boneblack.dtb;
+    setenv bootargs console=ttyO0,115200n8 root=/dev/mmcblk0p${rootpart} rootwait rw;
+    bootz ${loadaddr} - ${fdtaddr};
+'
+
+# Recovery boot (resets to slot A)
+setenv boot_recovery '
+    echo "=== RECOVERY MODE ===";
+    setenv slot a;
+    setenv bootcount 0;
+    saveenv;
+    run set_slot_parts;
+    run boot_slot;
+'
+
+# Master boot command - runs on every boot
+setenv bootcmd 'run ab_select; run set_slot_parts; run boot_slot'
+
+# Save all variables to persistent storage
+saveenv
+
+# Display current configuration
+echo "A/B Environment configured:"
+echo "  slot=${slot}"
+echo "  bootlimit=${bootlimit}"
+echo "  bootcount=${bootcount}"

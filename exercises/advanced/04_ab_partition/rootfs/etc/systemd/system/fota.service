@@ -1,0 +1,43 @@
+[Unit]
+Description=FOTA (Firmware Over-The-Air) Update Client
+Documentation=file:///opt/fota/README.md
+After=network-online.target
+Wants=network-online.target
+
+# Don't start if in recovery mode
+ConditionPathExists=!/var/run/recovery-mode
+
+[Service]
+Type=simple
+ExecStart=/opt/fota/fota_client --foreground
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart on failure
+Restart=on-failure
+RestartSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Resource limits
+MemoryMax=64M
+CPUQuota=10%
+
+# Security hardening (relaxed for update operations)
+NoNewPrivileges=false
+ProtectSystem=false
+PrivateTmp=true
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Allow network access
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fota
+
+[Install]
+WantedBy=multi-user.target

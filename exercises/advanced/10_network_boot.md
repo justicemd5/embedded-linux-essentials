@@ -5,6 +5,50 @@
 
 **Target Platform:** BeagleBone Black Rev C (AM335x)
 
+## Directory Structure
+
+```
+10_network_boot/
+├── scripts/
+│   ├── setup_server.sh      # Complete server setup (DHCP, TFTP, NFS)
+│   ├── deploy_kernel.sh     # Deploy kernel/modules to server
+│   ├── create_rootfs.sh     # Create/populate NFS rootfs
+│   └── monitor_boot.sh      # Monitor network boot traffic
+├── configs/
+│   ├── bbb-netboot.conf     # dnsmasq configuration
+│   ├── exports              # NFS exports file
+│   └── uboot_netboot.env    # U-Boot environment for network boot
+└── docs/
+    ├── network_boot_theory.md  # Comprehensive protocol theory
+    └── troubleshooting.md      # Common problems and solutions
+```
+
+## Quick Start
+
+```bash
+# Navigate to exercise directory
+cd 10_network_boot
+
+# 1. Set up network boot server (run as root on dev machine)
+sudo ./scripts/setup_server.sh eth1
+
+# 2. Create or populate the NFS rootfs
+sudo ./scripts/create_rootfs.sh
+
+# 3. Deploy kernel to TFTP server (from kernel source)
+cd /path/to/linux
+./scripts/deploy_kernel.sh
+
+# 4. Configure U-Boot on BeagleBone (via serial console)
+# => setenv serverip 192.168.10.1
+# => setenv netboot 'dhcp; tftp ${loadaddr} zImage; tftp ${fdtaddr} am335x-boneblack.dtb; setenv bootargs console=ttyO0,115200n8 root=/dev/nfs rw nfsroot=${serverip}:/export/bbb-root,v3,tcp ip=dhcp; bootz ${loadaddr} - ${fdtaddr}'
+# => saveenv
+# => run netboot
+
+# 5. Monitor boot process (optional)
+sudo ./scripts/monitor_boot.sh eth1
+```
+
 ## Objective
 
 Set up a complete network boot environment with TFTP and NFS for diskless BeagleBone Black operation.

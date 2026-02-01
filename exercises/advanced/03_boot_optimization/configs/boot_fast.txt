@@ -1,0 +1,34 @@
+# boot_fast.txt - Minimal U-Boot boot script for fastest boot
+#
+# This script eliminates all the auto-detection and searching
+# that the default BBB boot script does.
+#
+# Compile with:
+#   mkimage -C none -A arm -T script -d boot_fast.txt boot.scr
+#
+# Copy to /boot on the SD card FAT partition
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+# Minimal kernel command line
+setenv bootargs 'console=ttyO0,115200n8 root=/dev/mmcblk0p2 rootwait ro quiet loglevel=0'
+
+# Fixed addresses (AM335x standard)
+setenv loadaddr 0x82000000
+setenv fdtaddr 0x88000000
+
+# Load kernel directly (no searching)
+echo "Loading kernel..."
+load mmc 0:1 ${loadaddr} zImage
+
+# Load device tree directly
+echo "Loading DTB..."
+load mmc 0:1 ${fdtaddr} am335x-boneblack.dtb
+
+# Boot immediately
+echo "Booting..."
+bootz ${loadaddr} - ${fdtaddr}
+
+# If we get here, boot failed
+echo "Boot failed!"

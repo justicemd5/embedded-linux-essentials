@@ -5,6 +5,58 @@
 
 **Target Platform:** BeagleBone Black Rev C (AM335x)
 
+---
+
+## Directory Structure
+
+```
+08_yocto/
+├── scripts/
+│   ├── setup_yocto.sh         # Download and setup Yocto/Poky
+│   ├── build_image.sh         # Build images with various options
+│   └── create_recipe.sh       # Create new recipes interactively
+└── layer/
+    ├── conf/
+    │   └── layer.conf          # Layer configuration
+    ├── recipes-core/
+    │   └── images/
+    │       └── bbb-custom-image.bb
+    ├── recipes-app/
+    │   └── myapp/
+    │       ├── myapp_1.0.bb    # Example recipe
+    │       └── files/
+    │           ├── myapp.c
+    │           └── Makefile
+    └── recipes-kernel/
+        └── linux/
+            ├── linux-yocto_%.bbappend
+            └── files/
+                └── bbb-custom.cfg
+```
+
+## Quick Start
+
+```bash
+cd /home/mp/embedded-linux-essentials/exercises/advanced/08_yocto
+
+# 1. Setup Yocto (downloads ~5GB)
+chmod +x scripts/*.sh
+./scripts/setup_yocto.sh scarthgap ~/yocto-bbb
+
+# 2. Initialize build environment
+cd ~/yocto-bbb/poky
+source oe-init-build-env build-bbb
+
+# 3. Build minimal image (1-2 hours first time)
+bitbake core-image-minimal
+
+# 4. Flash to SD card
+xz -dk tmp/deploy/images/beaglebone-yocto/core-image-minimal-*.wic.xz
+sudo dd if=core-image-minimal-*.wic of=/dev/sdX bs=4M status=progress
+```
+
+---
+
 ## Objective
 
 Create a custom Linux distribution using the Yocto Project for the BeagleBone Black.

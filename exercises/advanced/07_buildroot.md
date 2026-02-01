@@ -5,6 +5,49 @@
 
 **Target Platform:** BeagleBone Black Rev C (AM335x)
 
+---
+
+## Directory Structure
+
+```
+07_buildroot/
+├── scripts/
+│   ├── setup_buildroot.sh     # Download and setup Buildroot
+│   ├── build_system.sh        # Build system with various targets
+│   └── create_sd_card.sh      # Create bootable SD card
+├── configs/
+│   ├── bbb_custom_defconfig   # Full-featured BBB config
+│   └── bbb_minimal_defconfig  # Minimal footprint config
+└── package/
+    └── myapp/
+        ├── Config.in          # Package configuration
+        ├── myapp.mk           # Buildroot package makefile
+        └── src/
+            ├── myapp.c        # Example application source
+            └── Makefile       # Application makefile
+```
+
+## Quick Start
+
+```bash
+cd /home/mp/embedded-linux-essentials/exercises/advanced/07_buildroot
+
+# 1. Setup Buildroot
+chmod +x scripts/*.sh
+./scripts/setup_buildroot.sh 2024.02 ~/bbb-buildroot
+
+# 2. Configure and build
+cd ~/bbb-buildroot/buildroot-2024.02
+make beaglebone_defconfig     # Or use custom defconfig
+make menuconfig               # Optional: customize
+make -j$(nproc)               # Build everything
+
+# 3. Create SD card
+sudo ./scripts/create_sd_card.sh /dev/sdX ~/bbb-buildroot/buildroot-2024.02/output/images
+```
+
+---
+
 ## Objective
 
 Build a complete, minimal embedded Linux system from source using Buildroot for the BeagleBone Black.

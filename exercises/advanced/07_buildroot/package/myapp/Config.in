@@ -1,0 +1,19 @@
+config BR2_PACKAGE_MYAPP
+    bool "myapp"
+    depends on BR2_USE_WCHAR
+    help
+      My custom application for BeagleBone Black.
+      
+      This is an example package demonstrating how to add
+      custom applications to Buildroot. It includes:
+      
+      - System information display
+      - GPIO access examples
+      - I2C communication
+      
+      Usage: myapp [-i] [-g] [-h]
+      
+      https://github.com/example/myapp
+
+comment "myapp needs a toolchain w/ wchar"
+    depends on !BR2_USE_WCHAR

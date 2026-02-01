@@ -1,0 +1,178 @@
+/*
+ * FIT Image with Multiple Configurations
+ * 
+ * Demonstrates multi-config FIT images for:
+ * - Standard boot
+ * - Recovery boot
+ * - Debug boot
+ *
+ * Author: Embedded Linux Labs
+ * License: MIT
+ */
+
+/dts-v1/;
+
+/ {
+    description = "Multi-configuration secure boot image";
+    #address-cells = <1>;
+
+    images {
+        /* Production kernel - optimized */
+        kernel-prod {
+            description = "Production Linux kernel (optimized)";
+            data = /incbin/("zImage");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            compression = "none";
+            load = <0x82000000>;
+            entry = <0x82000000>;
+            
+            hash-1 { algo = "sha256"; };
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "prod_key";
+            };
+        };
+
+        /* Debug kernel - with debug symbols */
+        kernel-debug {
+            description = "Debug Linux kernel";
+            data = /incbin/("zImage-debug");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            compression = "none";
+            load = <0x82000000>;
+            entry = <0x82000000>;
+            
+            hash-1 { algo = "sha256"; };
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev_key";
+            };
+        };
+
+        /* Standard device tree */
+        fdt-standard {
+            description = "Standard Device Tree";
+            data = /incbin/("am335x-boneblack.dtb");
+            type = "flat_dt";
+            arch = "arm";
+            compression = "none";
+            load = <0x88000000>;
+            
+            hash-1 { algo = "sha256"; };
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "prod_key";
+            };
+        };
+
+        /* Recovery device tree - minimal configuration */
+        fdt-recovery {
+            description = "Recovery Device Tree (minimal)";
+            data = /incbin/("am335x-boneblack-recovery.dtb");
+            type = "flat_dt";
+            arch = "arm";
+            compression = "none";
+            load = <0x88000000>;
+            
+            hash-1 { algo = "sha256"; };
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "prod_key";
+            };
+        };
+
+        /* Minimal recovery ramdisk */
+        ramdisk-recovery {
+            description = "Recovery Ramdisk";
+            data = /incbin/("recovery.cpio.gz");
+            type = "ramdisk";
+            arch = "arm";
+            os = "linux";
+            compression = "gzip";
+            
+            hash-1 { algo = "sha256"; };
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "prod_key";
+            };
+        };
+    };
+
+    configurations {
+        /* Default to production configuration */
+        default = "production";
+
+        /*
+         * Production Configuration
+         * - Optimized kernel
+         * - Standard DTB
+         * - No ramdisk (uses rootfs partition)
+         */
+        production {
+            description = "Production Boot";
+            kernel = "kernel-prod";
+            fdt = "fdt-standard";
+            
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "prod_key";
+                sign-images = "kernel", "fdt";
+            };
+        };
+
+        /*
+         * Recovery Configuration
+         * - Same kernel, minimal DTB
+         * - Includes recovery ramdisk
+         * - Self-contained recovery environment
+         */
+        recovery {
+            description = "Recovery Mode";
+            kernel = "kernel-prod";
+            fdt = "fdt-recovery";
+            ramdisk = "ramdisk-recovery";
+            
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "prod_key";
+                sign-images = "kernel", "fdt", "ramdisk";
+            };
+        };
+
+        /*
+         * Debug Configuration
+         * - Debug kernel with symbols
+         * - Standard DTB
+         * - For development and debugging
+         */
+        debug {
+            description = "Debug Mode";
+            kernel = "kernel-debug";
+            fdt = "fdt-standard";
+            
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev_key";
+                sign-images = "kernel", "fdt";
+            };
+        };
+    };
+};
+
+/*
+ * U-Boot usage:
+ * 
+ * # Boot default (production):
+ * bootm ${loadaddr}
+ * 
+ * # Boot specific configuration:
+ * bootm ${loadaddr}#recovery
+ * bootm ${loadaddr}#debug
+ * 
+ * # List configurations:
+ * iminfo ${loadaddr}
+ */

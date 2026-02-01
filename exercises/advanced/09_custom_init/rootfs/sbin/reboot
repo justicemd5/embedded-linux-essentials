@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# reboot - Reboot the system
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+echo ""
+echo "System is rebooting..."
+echo ""
+
+# Save timestamp
+date > /etc/timestamp 2>/dev/null
+
+# Sync filesystems
+sync
+
+# Tell init to reboot (SIGUSR1)
+kill -USR1 1
+
+# Wait for init to handle reboot
+sleep 5
+
+# If still running, force reboot
+echo "Forcing reboot..."
+sync
+/sbin/reboot -f 2>/dev/null || echo "Reboot failed"

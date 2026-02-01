@@ -1,0 +1,71 @@
+#!/bin/sh
+#
+# S10network - Network configuration script
+#
+# Starts network interfaces on boot
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+INTERFACES="eth0"
+DHCP_CLIENT="/sbin/udhcpc"
+
+start() {
+    echo "Starting network..."
+    
+    for iface in $INTERFACES; do
+        if [ -d "/sys/class/net/$iface" ]; then
+            echo "  Bringing up $iface..."
+            
+            if [ -x /sbin/ifconfig ]; then
+                ifconfig "$iface" up
+            elif [ -x /sbin/ip ]; then
+                ip link set "$iface" up
+            fi
+            
+            # Try DHCP
+            if [ -x "$DHCP_CLIENT" ]; then
+                $DHCP_CLIENT -i "$iface" -b -q 2>/dev/null &
+            fi
+        fi
+    done
+}
+
+stop() {
+    echo "Stopping network..."
+    
+    # Kill DHCP clients
+    killall udhcpc 2>/dev/null
+    
+    for iface in $INTERFACES; do
+        if [ -d "/sys/class/net/$iface" ]; then
+            echo "  Bringing down $iface..."
+            
+            if [ -x /sbin/ifconfig ]; then
+                ifconfig "$iface" down
+            elif [ -x /sbin/ip ]; then
+                ip link set "$iface" down
+            fi
+        fi
+    done
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        sleep 1
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

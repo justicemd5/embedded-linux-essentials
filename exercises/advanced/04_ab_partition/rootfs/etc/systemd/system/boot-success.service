@@ -1,0 +1,23 @@
+[Unit]
+Description=Mark boot as successful for A/B partition system
+Documentation=file:///opt/fota/README.md
+After=network-online.target multi-user.target
+Wants=network-online.target
+
+# Only run once per boot
+ConditionPathExists=!/var/run/boot-success-done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Wait for system to stabilize, then mark boot successful
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/sbin/fw_setenv bootcount 0
+ExecStartPost=/bin/touch /var/run/boot-success-done
+
+# If FOTA client exists, let it confirm the update
+ExecStartPost=-/opt/fota/fota_client --success
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+# Makefile for BeagleBone Black gpio_irq kernel module
+
+obj-m := gpio_irq.o
+
+KERNEL_DIR ?= $(HOME)/bbb/linux
+ARCH ?= arm
+CROSS_COMPILE ?= arm-linux-gnueabihf-
+
+ccflags-y := -Wall -Wextra
+
+all: modules
+
+modules:
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) ARCH=$(ARCH) \
+		CROSS_COMPILE=$(CROSS_COMPILE) modules
+
+clean:
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
+	rm -f *.o *.ko *.mod.c *.mod *.symvers *.order
+
+install:
+	scp gpio_irq.ko debian@beaglebone:/tmp/
+
+.PHONY: all modules clean install

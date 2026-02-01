@@ -7,271 +7,430 @@
 
 ## Objective
 
-Develop a loadable kernel module that interacts with hardware and provides userspace interfaces.
+Develop loadable kernel modules that interact with hardware and provide userspace interfaces. This exercise covers multiple module types from simple procfs to complex character devices and GPIO interrupt handlers.
 
 ## Prerequisites
 
 - Completed kernel build from Lab 03
-- Cross-compilation toolchain installed
+- Cross-compilation toolchain installed (`arm-linux-gnueabihf-gcc`)
 - BeagleBone Black with working kernel
-- Serial console access via USB (/dev/ttyACM0)
+- Serial console access via USB (`/dev/ttyACM0`)
 
 ## Difficulty: ⭐⭐⭐ Advanced
 
 ---
 
-## Tasks
+## 📁 Directory Structure
 
-1. Create basic kernel module skeleton
-2. Add initialization and cleanup functions
-3. Implement /proc interface for userspace interaction
-4. Cross-compile and test on BeagleBone Black
+```
+01_kernel_module/
+├── modules/
+│   ├── hwinfo/           # Basic procfs module
+│   │   ├── hwinfo.c
+│   │   └── Makefile
+│   ├── sysfs_demo/       # Sysfs interface module
+│   │   ├── sysfs_demo.c
+│   │   └── Makefile
+│   ├── chardev/          # Character device driver
+│   │   ├── chardev.c
+│   │   ├── chardev.h
+│   │   ├── test_chardev.c
+│   │   └── Makefile
+│   └── gpio_irq/         # GPIO interrupt handler
+│       ├── gpio_irq.c
+│       └── Makefile
+└── scripts/
+    ├── build_all_modules.sh
+    ├── deploy_modules.sh
+    └── test_modules.sh
+```
 
 ---
 
-## Step-by-Step Guide
+## Part 1: Kernel Module Theory
 
-### Step 1: Create Module Directory
+### What is a Kernel Module?
+
+Kernel modules are pieces of code that can be loaded and unloaded into the kernel dynamically. They extend the kernel's functionality without requiring a reboot.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 KERNEL MODULE ARCHITECTURE                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   USER SPACE                         │   │
+│  │                                                      │   │
+│  │  Applications ←──→ /proc ←──→ /sys ←──→ /dev        │   │
+│  │       ↓              ↓          ↓          ↓         │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                         │ System Calls                      │
+│  ════════════════════════════════════════════════════════   │
+│                         ▼ Kernel Boundary                   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                  KERNEL SPACE                        │   │
+│  │                                                      │   │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐             │   │
+│  │  │ procfs  │  │  sysfs  │  │  devfs  │             │   │
+│  │  │ handler │  │ handler │  │ handler │             │   │
+│  │  └────┬────┘  └────┬────┘  └────┬────┘             │   │
+│  │       │            │            │                   │   │
+│  │       └────────────┼────────────┘                   │   │
+│  │                    ▼                                │   │
+│  │  ┌──────────────────────────────────────────────┐   │   │
+│  │  │           YOUR KERNEL MODULE                  │   │   │
+│  │  │  ┌────────────────────────────────────────┐  │   │   │
+│  │  │  │  init() → register interfaces          │  │   │   │
+│  │  │  │  exit() → cleanup & unregister         │  │   │   │
+│  │  │  │  file_operations → read/write/ioctl    │  │   │   │
+│  │  │  └────────────────────────────────────────┘  │   │   │
+│  │  └──────────────────────────────────────────────┘   │   │
+│  │                    ↓                                │   │
+│  │  ┌──────────────────────────────────────────────┐   │   │
+│  │  │              HARDWARE                         │   │   │
+│  │  │  GPIO │ I2C │ SPI │ UART │ Memory-Mapped I/O │   │   │
+│  │  └──────────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Module Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 MODULE LIFECYCLE                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. COMPILE (on host)                                       │
+│     make → produces .ko file                                │
+│                                                             │
+│  2. TRANSFER                                                │
+│     scp module.ko target:/path/                             │
+│                                                             │
+│  3. LOAD                                                    │
+│     insmod module.ko [params]  → calls module_init()        │
+│     modprobe module            → handles dependencies       │
+│                                                             │
+│  4. ACTIVE                                                  │
+│     Module is now part of kernel                            │
+│     File operations handle user requests                    │
+│     IRQ handlers respond to hardware                        │
+│                                                             │
+│  5. UNLOAD                                                  │
+│     rmmod module               → calls module_exit()        │
+│     Resources freed, interfaces removed                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Userspace Interfaces
+
+| Interface | Location | Purpose | Best For |
+|-----------|----------|---------|----------|
+| procfs | `/proc/` | Process/system info | Read-only status, simple data |
+| sysfs | `/sys/` | Device attributes | Per-attribute files, kobjects |
+| chardev | `/dev/` | Byte stream device | Complex data, ioctl commands |
+| netlink | Sockets | Kernel-user messaging | Async events, large data |
+| debugfs | `/sys/kernel/debug/` | Debug information | Development, tracing |
+
+---
+
+## Part 2: Module Development
+
+### Module 1: Hardware Info (procfs)
+
+The simplest module demonstrating procfs interface.
+
+📁 **Source:** [modules/hwinfo/hwinfo.c](01_kernel_module/modules/hwinfo/hwinfo.c)
+📁 **Makefile:** [modules/hwinfo/Makefile](01_kernel_module/modules/hwinfo/Makefile)
+
+**Key Concepts:**
+- `proc_create()` - Create procfs entry
+- `seq_file` interface - Handle buffered reads
+- `struct proc_ops` - File operations for proc
+
+**Build and Test:**
 
 ```bash
-mkdir -p ~/bbb-modules/hwinfo
-cd ~/bbb-modules/hwinfo
-```
+cd 01_kernel_module/modules/hwinfo
+make KERNEL_DIR=~/bbb/linux
 
-### Step 2: Create the Module Source (hwinfo.c)
-
-```c
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
-#include <linux/uaccess.h>
-
-#define PROC_NAME "hwinfo"
-
-static int hwinfo_show(struct seq_file *m, void *v)
-{
-    seq_printf(m, "BeagleBone Black Hardware Info Module\n");
-    seq_printf(m, "======================================\n");
-    seq_printf(m, "Platform: TI AM335x (Cortex-A8)\n");
-    seq_printf(m, "Kernel Version: %s\n", UTS_RELEASE);
-    seq_printf(m, "System RAM: %lu MB\n", 
-               (unsigned long)(totalram_pages() * PAGE_SIZE / 1024 / 1024));
-    seq_printf(m, "Page Size: %lu bytes\n", PAGE_SIZE);
-    seq_printf(m, "HZ (Tick Rate): %d\n", HZ);
-    
-#ifdef CONFIG_ARM
-    seq_printf(m, "Architecture: ARM 32-bit\n");
-#endif
-    
-    return 0;
-}
-
-static int hwinfo_open(struct inode *inode, struct file *file)
-{
-    return single_open(file, hwinfo_show, NULL);
-}
-
-static const struct proc_ops hwinfo_fops = {
-    .proc_open    = hwinfo_open,
-    .proc_read    = seq_read,
-    .proc_lseek   = seq_lseek,
-    .proc_release = single_release,
-};
-
-static int __init hwinfo_init(void)
-{
-    struct proc_dir_entry *entry;
-    
-    entry = proc_create(PROC_NAME, 0444, NULL, &hwinfo_fops);
-    if (!entry) {
-        pr_err("hwinfo: failed to create /proc/%s\n", PROC_NAME);
-        return -ENOMEM;
-    }
-    
-    pr_info("hwinfo: module loaded, /proc/%s created\n", PROC_NAME);
-    return 0;
-}
-
-static void __exit hwinfo_exit(void)
-{
-    remove_proc_entry(PROC_NAME, NULL);
-    pr_info("hwinfo: module unloaded\n");
-}
-
-module_init(hwinfo_init);
-module_exit(hwinfo_exit);
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Embedded Linux Labs");
-MODULE_DESCRIPTION("BeagleBone Black Hardware Information Module");
-MODULE_VERSION("1.0");
-```
-
-### Step 3: Create Makefile
-
-```makefile
-# Makefile for BeagleBone Black kernel module
-obj-m := hwinfo.o
-
-# Path to your cross-compiled kernel source
-KERNEL_DIR ?= $(HOME)/bbb/linux
-
-# BeagleBone Black settings
-ARCH ?= arm
-CROSS_COMPILE ?= arm-linux-gnueabihf-
-
-# Build targets
-all:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) ARCH=$(ARCH) \
-		CROSS_COMPILE=$(CROSS_COMPILE) modules
-
-clean:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
-
-# Install to target (adjust IP/path as needed)
-install:
-	scp hwinfo.ko debian@beaglebone:/tmp/
-
-.PHONY: all clean install
-```
-
-### Step 4: Build the Module
-
-```bash
-# Set environment
-export KERNEL_DIR=~/bbb/linux
-export ARCH=arm
-export CROSS_COMPILE=arm-linux-gnueabihf-
-
-# Build
-make
-
-# Verify output
-file hwinfo.ko
-# Should show: ELF 32-bit LSB relocatable, ARM, ...
-```
-
-### Step 5: Deploy and Test on BeagleBone Black
-
-```bash
-# Copy to target
+# Deploy
 scp hwinfo.ko debian@192.168.7.2:/tmp/
 
-# Connect via serial console
-screen /dev/ttyACM0 115200
-
-# On BeagleBone Black:
+# On BBB
 sudo insmod /tmp/hwinfo.ko
-dmesg | tail -5
 cat /proc/hwinfo
 sudo rmmod hwinfo
 ```
 
----
-
-## Expected Output
+**Expected Output:**
 
 ```
-BeagleBone Black Hardware Info Module
-======================================
-Platform: TI AM335x (Cortex-A8)
-Kernel Version: 6.6.0
-System RAM: 512 MB
-Page Size: 4096 bytes
-HZ (Tick Rate): 100
-Architecture: ARM 32-bit
+╔═══════════════════════════════════════════════════════╗
+║     BeagleBone Black Hardware Information Module      ║
+╠═══════════════════════════════════════════════════════╣
+║ Platform: TI AM335x (Cortex-A8 @ 1GHz)                ║
+╠═══════════════════════════════════════════════════════╣
+║ KERNEL INFORMATION                                    ║
+║   Version: 6.6.0                                      ║
+...
 ```
 
 ---
 
-## Challenge Extensions
+### Module 2: Sysfs Demo
 
-### Challenge 1: Add Sysfs Interface
+Demonstrates sysfs attribute creation with read/write support.
 
-Create a sysfs interface instead of /proc:
+📁 **Source:** [modules/sysfs_demo/sysfs_demo.c](01_kernel_module/modules/sysfs_demo/sysfs_demo.c)
+📁 **Makefile:** [modules/sysfs_demo/Makefile](01_kernel_module/modules/sysfs_demo/Makefile)
 
-```c
-#include <linux/kobject.h>
-#include <linux/sysfs.h>
+**Key Concepts:**
+- `kobject_create_and_add()` - Create sysfs directory
+- `struct kobj_attribute` - Define attributes
+- `__ATTR()` / `__ATTR_RO()` - Attribute macros
 
-static struct kobject *hwinfo_kobj;
+**Sysfs Attributes Created:**
 
-static ssize_t ram_show(struct kobject *kobj, 
-                        struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%lu\n", 
-                   (unsigned long)(totalram_pages() * PAGE_SIZE / 1024 / 1024));
-}
+| Attribute | Mode | Description |
+|-----------|------|-------------|
+| `ram_mb` | RO | Total RAM in MB |
+| `brightness` | RW | Simulated LED brightness (0-100) |
+| `device_name` | RW | Configurable device name |
+| `stats` | RO | Read/write statistics |
+| `logging` | RW | Enable/disable logging |
 
-static struct kobj_attribute ram_attribute = 
-    __ATTR(ram_mb, 0444, ram_show, NULL);
+**Build and Test:**
 
-static int __init hwinfo_init(void)
-{
-    hwinfo_kobj = kobject_create_and_add("hwinfo", kernel_kobj);
-    if (!hwinfo_kobj)
-        return -ENOMEM;
-    
-    return sysfs_create_file(hwinfo_kobj, &ram_attribute.attr);
-}
+```bash
+cd 01_kernel_module/modules/sysfs_demo
+make KERNEL_DIR=~/bbb/linux
+
+# On BBB
+sudo insmod /tmp/sysfs_demo.ko
+
+# Read attributes
+cat /sys/kernel/bbb_demo/ram_mb
+cat /sys/kernel/bbb_demo/brightness
+
+# Write attribute
+echo 75 | sudo tee /sys/kernel/bbb_demo/brightness
+cat /sys/kernel/bbb_demo/stats
+
+sudo rmmod sysfs_demo
 ```
 
-### Challenge 2: Read AM335x Hardware Registers
+---
 
-```c
-#include <linux/io.h>
+### Module 3: Character Device
 
-#define AM335X_CONTROL_MODULE_BASE  0x44E10000
-#define DEVICE_ID_OFFSET            0x0600
+Full-featured character device with read/write/ioctl.
 
-static void read_device_id(struct seq_file *m)
-{
-    void __iomem *ctrl_base;
-    u32 device_id;
-    
-    ctrl_base = ioremap(AM335X_CONTROL_MODULE_BASE, 0x1000);
-    if (!ctrl_base) {
-        seq_printf(m, "Failed to map control module\n");
-        return;
-    }
-    
-    device_id = readl(ctrl_base + DEVICE_ID_OFFSET);
-    seq_printf(m, "Device ID: 0x%08x\n", device_id);
-    
-    iounmap(ctrl_base);
-}
+📁 **Source:** [modules/chardev/chardev.c](01_kernel_module/modules/chardev/chardev.c)
+📁 **Header:** [modules/chardev/chardev.h](01_kernel_module/modules/chardev/chardev.h)
+📁 **Test Program:** [modules/chardev/test_chardev.c](01_kernel_module/modules/chardev/test_chardev.c)
+📁 **Makefile:** [modules/chardev/Makefile](01_kernel_module/modules/chardev/Makefile)
+
+**Key Concepts:**
+- `alloc_chrdev_region()` - Dynamic major number
+- `cdev_add()` - Register character device
+- `class_create()` / `device_create()` - Auto-create /dev node
+- `copy_to_user()` / `copy_from_user()` - Safe data transfer
+- `unlocked_ioctl` - Custom commands
+
+**IOCTL Commands:**
+
+| Command | Type | Description |
+|---------|------|-------------|
+| `CHARDEV_IOCRESET` | `_IO` | Reset buffer to zeros |
+| `CHARDEV_IOCGETSIZE` | `_IOR` | Get buffer size |
+| `CHARDEV_IOCGETCOUNT` | `_IOR` | Get data length |
+
+**Build and Test:**
+
+```bash
+# Build module
+cd 01_kernel_module/modules/chardev
+make KERNEL_DIR=~/bbb/linux
+
+# Build test program
+arm-linux-gnueabihf-gcc -o test_chardev test_chardev.c
+
+# Deploy
+scp chardev.ko test_chardev debian@192.168.7.2:/tmp/
+
+# On BBB
+sudo insmod /tmp/chardev.ko
+sudo /tmp/test_chardev
+
+# Manual test
+echo "Hello World" > /dev/bbbchar
+cat /dev/bbbchar
+
+sudo rmmod chardev
 ```
 
-### Challenge 3: Add Write Capability
+---
+
+### Module 4: GPIO Interrupt Handler
+
+Demonstrates GPIO input with interrupt handling and debouncing.
+
+📁 **Source:** [modules/gpio_irq/gpio_irq.c](01_kernel_module/modules/gpio_irq/gpio_irq.c)
+📁 **Makefile:** [modules/gpio_irq/Makefile](01_kernel_module/modules/gpio_irq/Makefile)
+
+**Key Concepts:**
+- `gpiod_direction_input()` - Configure GPIO
+- `gpiod_to_irq()` - Get IRQ for GPIO
+- `request_irq()` - Register interrupt handler
+- Workqueue for bottom-half processing
+- Timer-based debouncing
+
+**Hardware Setup:**
+
+```
+BeagleBone Black P9 Header:
+┌─────┬─────┐
+│ GND │ VDD │ P9_1, P9_2
+├─────┼─────┤
+│     │     │
+├─────┼─────┤
+│     │     │
+├─────┼─────┤
+│     │     │
+├─────┼─────┤
+│ P12 │     │ ← GPIO1_28 (default for this module)
+├─────┼─────┤
+│     │     │
+...
+
+Wire a button:
+  P9_1 (GND) ──┤ Button ├── P9_12 (GPIO)
+  
+With internal pull-up, GPIO reads HIGH when button not pressed.
+```
+
+**Build and Test:**
+
+```bash
+cd 01_kernel_module/modules/gpio_irq
+make KERNEL_DIR=~/bbb/linux
+
+# On BBB - load with default GPIO
+sudo insmod /tmp/gpio_irq.ko
+
+# Or specify different GPIO
+sudo insmod /tmp/gpio_irq.ko gpio_num=48  # P9_15
+
+# Monitor interrupts
+watch -n1 cat /sys/class/gpio_irq/gpio_irq/irq_count
+
+# View kernel messages
+dmesg -w
+
+sudo rmmod gpio_irq
+```
+
+---
+
+## Part 3: Build and Deploy Scripts
+
+### Build All Modules
+
+📁 **Script:** [scripts/build_all_modules.sh](01_kernel_module/scripts/build_all_modules.sh)
+
+```bash
+# Make executable
+chmod +x 01_kernel_module/scripts/*.sh
+
+# Build all modules
+./01_kernel_module/scripts/build_all_modules.sh ~/bbb/linux
+```
+
+### Deploy to BBB
+
+📁 **Script:** [scripts/deploy_modules.sh](01_kernel_module/scripts/deploy_modules.sh)
+
+```bash
+# Deploy all modules
+./01_kernel_module/scripts/deploy_modules.sh 192.168.7.2
+
+# Deploy specific module
+./01_kernel_module/scripts/deploy_modules.sh 192.168.7.2 hwinfo
+```
+
+### Run Tests
+
+📁 **Script:** [scripts/test_modules.sh](01_kernel_module/scripts/test_modules.sh)
+
+```bash
+# Run all module tests
+./01_kernel_module/scripts/test_modules.sh 192.168.7.2
+```
+
+---
+
+## Part 4: Advanced Topics
+
+### Memory Management in Kernel
 
 ```c
-static ssize_t hwinfo_write(struct file *file, const char __user *buf,
-                            size_t count, loff_t *ppos)
-{
-    char kbuf[64];
-    
-    if (count >= sizeof(kbuf))
-        return -EINVAL;
-    
-    if (copy_from_user(kbuf, buf, count))
-        return -EFAULT;
-    
-    kbuf[count] = '\0';
-    pr_info("hwinfo: received command: %s", kbuf);
-    
-    /* Process command here */
-    
-    return count;
-}
+/* Kernel memory allocation functions */
 
-static const struct proc_ops hwinfo_fops = {
-    .proc_open    = hwinfo_open,
-    .proc_read    = seq_read,
-    .proc_write   = hwinfo_write,
-    .proc_lseek   = seq_lseek,
-    .proc_release = single_release,
-};
+/* For small allocations (< PAGE_SIZE) */
+ptr = kmalloc(size, GFP_KERNEL);      /* May fail */
+ptr = kzalloc(size, GFP_KERNEL);      /* Zero-initialized */
+kfree(ptr);
+
+/* For arrays */
+ptr = kcalloc(n, size, GFP_KERNEL);
+
+/* For larger allocations */
+ptr = vmalloc(size);                   /* Virtual contiguous */
+vfree(ptr);
+
+/* GFP flags */
+GFP_KERNEL   /* May sleep, normal allocation */
+GFP_ATOMIC   /* Cannot sleep, interrupt context */
+GFP_DMA      /* DMA-capable memory */
+```
+
+### Concurrency and Locking
+
+```c
+/* Mutex - can sleep */
+DEFINE_MUTEX(my_mutex);
+mutex_lock(&my_mutex);
+/* critical section */
+mutex_unlock(&my_mutex);
+
+/* Spinlock - cannot sleep, IRQ-safe */
+DEFINE_SPINLOCK(my_lock);
+spin_lock_irqsave(&my_lock, flags);
+/* critical section */
+spin_unlock_irqrestore(&my_lock, flags);
+
+/* RCU - read-optimized */
+rcu_read_lock();
+/* read data */
+rcu_read_unlock();
+```
+
+### Debug Techniques
+
+```bash
+# Dynamic debug - enable at runtime
+echo 'module hwinfo +p' > /sys/kernel/debug/dynamic_debug/control
+
+# ftrace - function tracing
+echo function > /sys/kernel/debug/tracing/current_tracer
+echo hwinfo_show > /sys/kernel/debug/tracing/set_ftrace_filter
+cat /sys/kernel/debug/tracing/trace
+
+# Kernel address sanitizer (if enabled)
+# Detects memory errors in modules
 ```
 
 ---
@@ -280,37 +439,52 @@ static const struct proc_ops hwinfo_fops = {
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| "Invalid module format" | Kernel version mismatch | Rebuild with correct kernel headers |
-| "Unknown symbol" | Missing kernel config | Enable required features in kernel config |
-| Module crashes on load | NULL pointer dereference | Add defensive checks, use pr_debug |
-| Permission denied | Not root | Use sudo for insmod/rmmod |
+| "Invalid module format" | Kernel version mismatch | Rebuild with correct kernel source |
+| "Unknown symbol" | Missing dependency | Check `nm module.ko \| grep " U "` |
+| "Permission denied" | Not root | Use `sudo` for insmod/rmmod |
+| Module crashes on load | NULL dereference | Add defensive checks, use `pr_debug` |
+| "Device or resource busy" | Already loaded | `rmmod` first, or check references |
 
-### Debugging Tips
+### Debugging Workflow
 
 ```bash
 # Check kernel log for errors
-dmesg | grep hwinfo
+dmesg | tail -50
 
 # Verify module info
-modinfo hwinfo.ko
+modinfo module.ko
 
 # Check symbol dependencies
-nm hwinfo.ko | grep " U "
+nm module.ko | grep " U "
 
-# Enable dynamic debug
-echo 'module hwinfo +p' > /sys/kernel/debug/dynamic_debug/control
+# List loaded modules
+lsmod | grep module_name
+
+# Check reference count
+cat /sys/module/module_name/refcnt
 ```
 
 ---
 
 ## Verification Checklist
 
-- [ ] Module compiles without warnings
-- [ ] Module loads successfully on BBB
-- [ ] /proc/hwinfo shows correct information
-- [ ] Module unloads cleanly
-- [ ] No memory leaks (check with kmemleak if enabled)
-- [ ] dmesg shows init/exit messages
+- [ ] All modules compile without warnings
+- [ ] hwinfo module creates /proc/hwinfo
+- [ ] sysfs_demo creates /sys/kernel/bbb_demo/
+- [ ] chardev creates /dev/bbbchar automatically
+- [ ] gpio_irq responds to button presses
+- [ ] All modules unload cleanly
+- [ ] No kernel oops or warnings in dmesg
+
+---
+
+## Challenge Extensions
+
+1. **Add netlink interface** - Implement async notifications to userspace
+2. **Create platform driver** - Use device tree binding
+3. **Add debugfs entries** - Expose internal state for debugging
+4. **Implement mmap** - Allow userspace to map kernel memory
+5. **Add power management** - Implement suspend/resume callbacks
 
 ---
 

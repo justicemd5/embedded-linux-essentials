@@ -1,0 +1,72 @@
+#!/bin/sh
+#
+# S50dropbear - Start SSH server
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+DROPBEAR="/usr/sbin/dropbear"
+DROPBEAR_KEY="/etc/dropbear"
+PID_FILE="/var/run/dropbear.pid"
+
+generate_keys() {
+    mkdir -p "$DROPBEAR_KEY"
+    
+    if [ ! -f "$DROPBEAR_KEY/dropbear_rsa_host_key" ]; then
+        echo "  Generating RSA host key..."
+        dropbearkey -t rsa -f "$DROPBEAR_KEY/dropbear_rsa_host_key" 2>/dev/null
+    fi
+    
+    if [ ! -f "$DROPBEAR_KEY/dropbear_ecdsa_host_key" ]; then
+        echo "  Generating ECDSA host key..."
+        dropbearkey -t ecdsa -f "$DROPBEAR_KEY/dropbear_ecdsa_host_key" 2>/dev/null
+    fi
+}
+
+start() {
+    echo "Starting SSH server (dropbear)..."
+    
+    if [ ! -x "$DROPBEAR" ]; then
+        echo "  dropbear not found, skipping"
+        return
+    fi
+    
+    # Generate keys if needed
+    generate_keys
+    
+    # Start dropbear
+    $DROPBEAR -R -p 22
+    
+    echo "  SSH server started on port 22"
+}
+
+stop() {
+    echo "Stopping SSH server..."
+    
+    if [ -f "$PID_FILE" ]; then
+        kill $(cat "$PID_FILE") 2>/dev/null
+        rm -f "$PID_FILE"
+    else
+        killall dropbear 2>/dev/null
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        sleep 1
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

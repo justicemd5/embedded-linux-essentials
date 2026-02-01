@@ -1,0 +1,84 @@
+# U-Boot Falcon Mode Environment Variables
+# Requires U-Boot built with CONFIG_SPL_OS_BOOT=y
+#
+# Usage at U-Boot prompt:
+#   => source scripts/falcon_environment.txt
+
+# Falcon mode settings
+setenv falcon_enabled 1
+setenv falcon_slot a
+
+# Kernel boot arguments for each slot
+setenv falcon_args_a 'console=ttyO0,115200n8 root=/dev/mmcblk0p2 rootwait rw quiet'
+setenv falcon_args_b 'console=ttyO0,115200n8 root=/dev/mmcblk0p5 rootwait rw quiet'
+
+# Prepare Falcon boot args for Slot A
+# Run this after updating kernel/DTB on Slot A
+setenv falcon_prepare_a '
+    echo "Preparing Falcon args for Slot A...";
+    fatload mmc 0:1 ${loadaddr} zImage;
+    fatload mmc 0:1 ${fdtaddr} am335x-boneblack.dtb;
+    setenv bootargs ${falcon_args_a};
+    spl export fdt ${loadaddr} - ${fdtaddr};
+    fatwrite mmc 0:1 ${fdtaddr} args 0x${filesize};
+    echo "Slot A Falcon args saved";
+'
+
+# Prepare Falcon boot args for Slot B
+# Run this after updating kernel/DTB on Slot B
+setenv falcon_prepare_b '
+    echo "Preparing Falcon args for Slot B...";
+    fatload mmc 0:3 ${loadaddr} zImage;
+    fatload mmc 0:3 ${fdtaddr} am335x-boneblack.dtb;
+    setenv bootargs ${falcon_args_b};
+    spl export fdt ${loadaddr} - ${fdtaddr};
+    fatwrite mmc 0:3 ${fdtaddr} args 0x${filesize};
+    echo "Slot B Falcon args saved";
+'
+
+# Prepare both slots
+setenv falcon_prepare_all '
+    run falcon_prepare_a;
+    run falcon_prepare_b;
+    echo "All Falcon args prepared";
+'
+
+# Switch Falcon slot (used after OTA update)
+setenv falcon_switch_slot '
+    if test ${falcon_slot} = a; then
+        setenv falcon_slot b;
+    else
+        setenv falcon_slot a;
+    fi;
+    saveenv;
+    echo "Falcon will boot from slot ${falcon_slot} on next reboot";
+'
+
+# Disable Falcon mode (boot via full U-Boot)
+setenv falcon_disable '
+    setenv falcon_enabled 0;
+    saveenv;
+    echo "Falcon mode disabled, will use normal U-Boot boot";
+'
+
+# Enable Falcon mode
+setenv falcon_enable '
+    setenv falcon_enabled 1;
+    saveenv;
+    echo "Falcon mode enabled";
+'
+
+# Save environment
+saveenv
+
+# Display configuration
+echo "Falcon Mode configured:"
+echo "  falcon_enabled=${falcon_enabled}"
+echo "  falcon_slot=${falcon_slot}"
+echo ""
+echo "Commands available:"
+echo "  run falcon_prepare_a   - Generate args for Slot A"
+echo "  run falcon_prepare_b   - Generate args for Slot B"
+echo "  run falcon_switch_slot - Toggle active Falcon slot"
+echo "  run falcon_disable     - Disable Falcon mode"
+echo "  run falcon_enable      - Enable Falcon mode"

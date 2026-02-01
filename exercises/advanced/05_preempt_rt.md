@@ -20,6 +20,41 @@ Apply PREEMPT_RT patch to the Linux kernel and measure latency improvements for 
 
 ---
 
+## 📁 Directory Structure
+
+```
+05_preempt_rt/
+├── apps/
+│   ├── Makefile              # Build all RT applications
+│   ├── rt_application.c      # Single-threaded RT template
+│   ├── multi_rt_app.c        # Multi-threaded RT example
+│   ├── gpio_rt_handler.c     # GPIO interrupt handler
+│   └── cyclictest_custom.c   # Custom latency measurement tool
+├── scripts/
+│   ├── apply_rt_patch.sh     # Download and apply PREEMPT_RT patch
+│   ├── run_latency_test.sh   # Comprehensive latency testing
+│   └── setup_rt_environment.sh  # System optimization script
+└── configs/
+    └── rt_kernel.config      # Kernel config fragment for RT
+```
+
+### Quick Start
+
+```bash
+# Apply RT patch to kernel
+./05_preempt_rt/scripts/apply_rt_patch.sh 6.6
+
+# Build RT applications
+cd 05_preempt_rt/apps
+make
+make deploy
+
+# Run latency test
+./05_preempt_rt/scripts/run_latency_test.sh standard
+```
+
+---
+
 ## Table of Contents
 
 1. [Real-Time Systems Theory](#real-time-systems-theory)

@@ -1,0 +1,85 @@
+# boot_falcon.txt - Falcon Mode boot script setup
+#
+# Falcon Mode allows SPL to boot Linux directly, skipping U-Boot.
+# This saves ~2 seconds but removes U-Boot flexibility.
+#
+# This script prepares the SPL for Falcon Mode.
+# Run these commands once in U-Boot console.
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+# =============================================================================
+# FALCON MODE SETUP PROCEDURE
+# =============================================================================
+#
+# 1. Boot into U-Boot console normally
+# 2. Run the commands in this file one by one
+# 3. On subsequent boots, SPL will boot Linux directly
+#
+# To return to normal boot: hold button during power-on
+# =============================================================================
+
+# Step 1: Set up minimal bootargs for Falcon Mode
+setenv bootargs 'console=ttyO0,115200n8 root=/dev/mmcblk0p2 rootwait ro quiet'
+
+# Step 2: Define addresses
+setenv loadaddr 0x82000000
+setenv fdtaddr 0x88000000
+
+# Step 3: Load kernel and DTB
+mmc dev 0
+load mmc 0:1 ${loadaddr} zImage
+load mmc 0:1 ${fdtaddr} am335x-boneblack.dtb
+
+# Step 4: Export args to SPL
+# This command prepares the kernel args for SPL direct boot
+# Format: spl export fdt <kernel_addr> - <fdt_addr>
+spl export fdt ${loadaddr} - ${fdtaddr}
+
+# Step 5: Save to persistent storage
+# The SPL args are stored in a special format
+saveenv
+
+# Step 6: Verify setup
+# Check that args.bin was created
+mmc read ${loadaddr} 0 100
+md ${loadaddr}
+
+# =============================================================================
+# TESTING FALCON MODE
+# =============================================================================
+#
+# After setup, reboot and SPL should boot Linux directly.
+# You should see:
+#   - "U-Boot SPL" message
+#   - IMMEDIATELY followed by "Booting Linux on physical CPU..."
+#   - NO "U-Boot 20xx.xx" message
+#
+# If it doesn't work:
+#   1. Check that kernel and DTB are at expected locations
+#   2. Verify bootargs are correct
+#   3. Check SPL has Falcon Mode enabled (CONFIG_SPL_OS_BOOT=y)
+#
+# =============================================================================
+
+# =============================================================================
+# RECOVERY FROM FALCON MODE
+# =============================================================================
+#
+# Method 1: Hold boot button during power-on
+#   - Forces fallback to U-Boot proper
+#
+# Method 2: From U-Boot console
+#   setenv falcon_boot 0
+#   saveenv
+#
+# Method 3: Overwrite args area
+#   mmc write 0 0 100   # WARNING: destroys SPL args
+#
+# =============================================================================
+
+echo "Falcon Mode setup complete"
+echo "Reboot to test Falcon Mode boot"
+echo ""
+echo "To exit Falcon Mode: hold button during power-on"

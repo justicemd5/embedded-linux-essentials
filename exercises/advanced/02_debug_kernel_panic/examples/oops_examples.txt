@@ -1,0 +1,139 @@
+# Example ARM Oops Messages for Reference
+#
+# This file contains example kernel oops outputs for study
+# Use these as references when analyzing real crashes
+
+================================================================================
+EXAMPLE 1: NULL Pointer Dereference
+================================================================================
+
+[  123.456789] buggy: About to crash on BeagleBone Black...
+[  123.456790] buggy: Dereferencing NULL pointer in 3..2..1..
+[  123.456800] Unable to handle kernel NULL pointer dereference at virtual address 00000000
+[  123.456810] pgd = (ptrval)
+[  123.456820] [00000000] *pgd=00000000
+[  123.456830] Internal error: Oops: 805 [#1] SMP ARM
+[  123.456840] Modules linked in: buggy(O+)
+[  123.456850] CPU: 0 PID: 123 Comm: kworker/0:1 Tainted: G           O      6.6.0 #1
+[  123.456860] Hardware name: TI AM335x BeagleBone Black
+[  123.456870] Workqueue: events buggy_handler [buggy]
+[  123.456880] PC is at trigger_null_deref+0x2c/0x40 [buggy]
+[  123.456890] LR is at buggy_handler+0x20/0x50 [buggy]
+[  123.456900] pc : [<bf000028>]    lr : [<bf000060>]    psr: 60000013
+[  123.456910] sp : cf8a5f00  ip : cf8a5f38  fp : cf8a5f34
+[  123.456920] r10: 00000000  r9 : c0803a00  r8 : cf8a4000
+[  123.456930] r7 : c1820100  r6 : bf000000  r5 : cf8f7e00  r4 : c1820118
+[  123.456940] r3 : 0000002a  r2 : 00000000  r1 : cf8a5e94  r0 : 00000000
+[  123.456950] Flags: nZCv  IRQs on  FIQs on  Mode SVC_32  ISA ARM
+[  123.456960] Control: 10c5387d  Table: 8f8b4019  DAC: 00000051
+[  123.456970] Process kworker/0:1 (pid: 123, stack limit = 0x(ptrval))
+[  123.456980] Stack: (0xcf8a5f00 to 0xcf8a6000)
+[  123.456990] 5f00: c1820118 cf8f7e00 bf000000 c0047abc cf8a5f34 cf8a5f38 00000000 c0047e08
+[  123.457000] 5f20: c1820118 c0803a00 cf8a4000 00000000 cf8f7e00 c0047abc c1820100 00000008
+[  123.457010] 5f40: cf8a4000 c0803a00 00000000 00000000 cf8a5f78 cf8a5f58 c00478a4 c0047470
+[  123.457020] 5f60: c0803a00 c0803a00 cf8a5f78 cf8a5f78 cf8a5fa8 cf8a5f88 c004a248 c0047814
+[  123.457030] 5f80: c0a6e228 cf8a5fac cf8a4000 c004a148 00000000 00000000 00000000 00000000
+[  123.457040] 5fa0: 00000000 cf8a5fb0 c00090ec c004a158 00000000 00000000 00000000 00000000
+[  123.457050] 5fc0: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+[  123.457060] 5fe0: 00000000 00000000 00000000 00000000 00000013 00000000 00000000 00000000
+[  123.457070] Call trace:
+[  123.457080]  trigger_null_deref+0x2c/0x40 [buggy]
+[  123.457090]  buggy_handler+0x20/0x50 [buggy]
+[  123.457100]  process_one_work+0x1a8/0x2c0
+[  123.457110]  worker_thread+0x50/0x4b4
+[  123.457120]  kthread+0xf0/0xfc
+[  123.457130]  ret_from_fork+0x14/0x28
+
+ANALYSIS KEY POINTS:
+--------------------
+1. "Unable to handle kernel NULL pointer dereference at virtual address 00000000"
+   → The crash was caused by accessing address 0x00000000 (NULL)
+
+2. "Oops: 805"
+   → Error code 805 = Write to invalid address (bit 11 set = write access)
+
+3. "PC is at trigger_null_deref+0x2c/0x40 [buggy]"
+   → Crash in function trigger_null_deref at offset 0x2c
+   → Total function size is 0x40 bytes
+
+4. "r0 : 00000000"
+   → Register r0 contains NULL (this is the pointer)
+
+5. "r3 : 0000002a"
+   → r3 contains 0x2a = 42 (the value we tried to write)
+
+FIX: Check for NULL before dereferencing pointers.
+
+
+================================================================================
+EXAMPLE 2: Division by Zero
+================================================================================
+
+[  100.123456] buggy: BUG 4: About to divide by zero...
+[  100.123460] buggy: Calculating 100 / 0...
+[  100.123470] Division by zero in kernel.
+[  100.123480] Internal error: Oops - undefined instruction: 0 [#1] SMP ARM
+[  100.123490] Modules linked in: buggy(O+)
+[  100.123500] CPU: 0 PID: 456 Comm: kworker/0:1 Tainted: G           O      6.6.0 #1
+[  100.123510] Hardware name: TI AM335x BeagleBone Black
+[  100.123520] PC is at trigger_div_by_zero+0x18/0x30 [buggy]
+
+ANALYSIS: ARM doesn't have hardware divide trap, but compiler may add check.
+
+
+================================================================================
+EXAMPLE 3: Stack Overflow
+================================================================================
+
+[  200.111111] buggy: BUG 3: About to overflow the stack...
+[  200.111120] buggy: Starting infinite recursion...
+[  200.111130] buggy: Recursion depth: 0
+[  200.111140] buggy: Recursion depth: 1
+...
+[  200.111900] buggy: Recursion depth: 1020
+[  200.112000] Kernel stack overflow.
+[  200.112010] Internal error: Oops - stack overflow: 0 [#1] SMP ARM
+[  200.112020] CPU: 0 PID: 789 Comm: kworker/0:1 Tainted: G           O      6.6.0 #1
+[  200.112030] Process kworker/0:1 (pid: 789, stack limit = 0x(ptrval))
+
+ANALYSIS: Each recursion consumes 1KB+ of stack (local_buffer + overhead).
+          Kernel stack is typically 8KB on ARM, so ~7-8 levels cause overflow.
+
+
+================================================================================
+ARM OOPS ERROR CODES
+================================================================================
+
+Oops Error Code Format (for ARM):
+  Bits [10:0] encode the specific error
+
+Common codes:
+  0x005 = Read from invalid address
+  0x805 = Write to invalid address
+  0x017 = Alignment fault (read)
+  0x817 = Alignment fault (write)
+  0x207 = Execute from invalid address
+
+Bit meanings:
+  Bit 11 (0x800) = Write access (0 = read)
+  Bits 4-0 = FSR (Fault Status Register) encoding
+
+
+================================================================================
+DEBUGGING COMMANDS
+================================================================================
+
+# Generate disassembly with source
+arm-linux-gnueabihf-objdump -S buggy.ko > buggy_annotated.dis
+
+# Find symbol at offset
+arm-linux-gnueabihf-nm buggy.ko | grep -i trigger
+
+# Get line number from offset
+arm-linux-gnueabihf-addr2line -e buggy.ko -f 0x2c
+
+# Examine module info
+modinfo buggy.ko
+
+# Check for undefined symbols
+arm-linux-gnueabihf-nm buggy.ko | grep " U "

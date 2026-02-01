@@ -1,0 +1,109 @@
+#!/bin/sh
+#
+# rcS - Main startup script for BeagleBone Black
+#
+# This script is run by init during boot.
+# It sets up the basic system environment.
+#
+# Author: Embedded Linux Labs
+# License: MIT
+
+echo "========================================"
+echo " BeagleBone Black Startup Script"
+echo "========================================"
+
+# Remount root filesystem read-write
+echo "Remounting root filesystem read-write..."
+mount -o remount,rw / 2>/dev/null
+
+# Set up PATH
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+# Set up loopback interface
+echo "Setting up loopback interface..."
+if [ -x /sbin/ifconfig ]; then
+    ifconfig lo 127.0.0.1 netmask 255.0.0.0 up
+elif [ -x /sbin/ip ]; then
+    ip link set lo up
+    ip addr add 127.0.0.1/8 dev lo
+fi
+
+# Set up ethernet interface
+echo "Setting up ethernet interface..."
+if [ -x /sbin/ifconfig ]; then
+    ifconfig eth0 up
+    
+    # Try DHCP if udhcpc is available
+    if [ -x /sbin/udhcpc ]; then
+        udhcpc -i eth0 -b -q &
+    fi
+elif [ -x /sbin/ip ]; then
+    ip link set eth0 up
+fi
+
+# Set system time from saved timestamp (if no RTC)
+if [ -f /etc/timestamp ]; then
+    echo "Restoring saved timestamp..."
+    date -s "$(cat /etc/timestamp)" 2>/dev/null
+fi
+
+# Mount additional filesystems from fstab
+if [ -f /etc/fstab ]; then
+    echo "Mounting filesystems from fstab..."
+    mount -a 2>/dev/null
+fi
+
+# Load kernel modules
+if [ -d /lib/modules/$(uname -r) ]; then
+    echo "Loading kernel modules..."
+    for mod in /lib/modules/$(uname -r)/*.ko; do
+        if [ -f "$mod" ]; then
+            modname=$(basename "$mod" .ko)
+            insmod "$mod" 2>/dev/null && echo "  Loaded: $modname"
+        fi
+    done
+fi
+
+# Set up GPIO permissions
+if [ -d /sys/class/gpio ]; then
+    echo "Setting up GPIO permissions..."
+    chmod 666 /sys/class/gpio/export 2>/dev/null
+    chmod 666 /sys/class/gpio/unexport 2>/dev/null
+fi
+
+# Set up PWM permissions
+if [ -d /sys/class/pwm ]; then
+    echo "Setting up PWM permissions..."
+    chmod -R 666 /sys/class/pwm/* 2>/dev/null
+fi
+
+# Set up LEDs
+echo "Configuring LEDs..."
+for led in /sys/class/leds/beaglebone:green:usr*; do
+    if [ -d "$led" ]; then
+        echo none > "$led/trigger" 2>/dev/null
+    fi
+done
+# Set heartbeat on USR0
+echo heartbeat > /sys/class/leds/beaglebone:green:usr0/trigger 2>/dev/null
+
+# Run additional startup scripts
+echo "Running additional startup scripts..."
+for script in /etc/init.d/S*; do
+    if [ -x "$script" ]; then
+        name=$(basename "$script")
+        echo "  Running: $name"
+        "$script" start
+    fi
+done
+
+# Save current timestamp for next boot
+date > /etc/timestamp 2>/dev/null
+
+echo ""
+echo "========================================"
+echo " Startup Complete"
+echo "========================================"
+echo ""
+
+exit 0
